@@ -1,61 +1,116 @@
-import { getDatabase } from '../db/client';
-import { dreams, dreamChunks } from '../db/schema';
-import { chunkText } from './chunker';
-import { embedChunk } from './embedder';
-import { retrieveChunks, RetrievedChunk } from './retriever';
-import { embedText } from '../models/embedContext';
+import { getDatabase, getSqliteDb } from '../db/client';
+import { dreams } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import type { RetrievedChunk } from './retriever';
+import { semanticSearch } from './retriever';
+import { embedAndStore } from './embedder';
+
+// Re-export so existing importers (chat.ts, etc.) keep working unchanged.
+export type { RetrievedChunk };
 
 /**
- * Index a dream entry into the vector store.
- * Chunks the transcript, embeds each chunk, stores in dream_chunks.
+ * Index a dream into the FTS5 full-text search table.
+ * Instant — no model loading required.
  */
-export async function indexDream(
+export async function indexDream(dreamId: number, transcript: string): Promise<void> {
+  if (!transcript || transcript.length === 0) return;
+
+  const sqlite = getSqliteDb();
+  if (!sqlite) throw new Error('Database not initialized.');
+
+  await sqlite.runAsync(
+    'INSERT OR REPLACE INTO dream_search(rowid, transcript) VALUES (?, ?)',
+    [dreamId, transcript],
+  );
+}
+
+/**
+ * Embed a dream's transcript and stage each chunk as a BLOB in SQLite.
+ * Crash-safe: one chunk at a time with explicit GC yields.
+ * Silently skips if the embedding model is not downloaded.
+ */
+export async function embedDream(
   dreamId: number,
   transcript: string,
-  onProgress?: (done: number, total: number) => void
+  onProgress?: (p: number) => void,
 ): Promise<void> {
-  if (!transcript || transcript.trim().length === 0) return;
+  return embedAndStore(dreamId, transcript, onProgress);
+}
 
-  const db = getDatabase();
-
-  // Delete any existing chunks for this dream (re-indexing)
-  await db.delete(dreamChunks).where(eq(dreamChunks.dreamId, dreamId));
-
-  const chunks = chunkText(transcript);
-  if (chunks.length === 0) return;
-
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    const embedding = await embedChunk(chunk.text);
-
-    await db.insert(dreamChunks).values({
-      dreamId,
-      chunkText: chunk.text,
-      embedding: JSON.stringify(embedding),
-      chunkIdx: chunk.index,
-    });
-
-    onProgress?.(i + 1, chunks.length);
-  }
-
-  // Mark dream as processed
-  await db
-    .update(dreams)
-    .set({ isProcessed: true, updatedAt: new Date().toISOString() })
-    .where(eq(dreams.id, dreamId));
+/**
+ * Remove a dream from both search indexes (called on dream delete).
+ */
+export async function removeDreamFromIndex(dreamId: number): Promise<void> {
+  const sqlite = getSqliteDb();
+  if (!sqlite) return;
+  await sqlite.runAsync('DELETE FROM dream_search WHERE rowid = ?', [dreamId]);
+  await sqlite.runAsync('DELETE FROM dream_chunks WHERE dream_id = ?', [dreamId]);
 }
 
 /**
  * Query the dream journal with a natural language question.
- * Returns top-K relevant chunks for use in LLM context.
+ *
+ * Strategy:
+ *  1. Try semantic vector search (requires embed model + indexed embeddings).
+ *     This finds thematically related dreams even without exact word matches.
+ *  2. Fall back to FTS5 keyword search if embeddings are not available.
  */
 export async function queryDreams(
   question: string,
-  topK = 5
+  topK = 5,
 ): Promise<RetrievedChunk[]> {
-  const queryEmbedding = await embedText(question);
-  return retrieveChunks(queryEmbedding, topK);
+  const semantic = await semanticSearch(question, topK);
+  if (semantic.length > 0) return semantic;
+
+  return ftsSearch(question, topK);
+}
+
+async function ftsSearch(
+  question: string,
+  topK: number,
+): Promise<RetrievedChunk[]> {
+  const sqlite = getSqliteDb();
+  if (!sqlite) return [];
+
+  const ftsQuery = question.replace(/['"*^()]/g, ' ').trim();
+  if (!ftsQuery) return [];
+
+  type FtsRow = { rowid: number; snippet: string };
+  let rows: FtsRow[] = [];
+  try {
+    rows = await sqlite.getAllAsync<FtsRow>(
+      `SELECT rowid,
+              snippet(dream_search, 0, '', '', '…', 32) AS snippet
+       FROM dream_search
+       WHERE dream_search MATCH ?
+       ORDER BY rank
+       LIMIT ?`,
+      [ftsQuery, topK],
+    );
+  } catch {
+    return [];
+  }
+
+  if (rows.length === 0) return [];
+
+  const db = getDatabase();
+  const results: RetrievedChunk[] = [];
+  for (const row of rows) {
+    const [dream] = await db
+      .select({ id: dreams.id, title: dreams.title, createdAt: dreams.createdAt })
+      .from(dreams)
+      .where(eq(dreams.id, row.rowid));
+    if (dream) {
+      results.push({
+        dreamId: dream.id,
+        dreamTitle: dream.title,
+        dreamCreatedAt: dream.createdAt,
+        chunkText: row.snippet,
+        score: 1,
+      });
+    }
+  }
+  return results;
 }
 
 /**

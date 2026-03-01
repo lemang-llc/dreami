@@ -9,7 +9,6 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Platform } from 'react-native';
 import {
   loadNotificationSettings,
   saveNotificationSettings,
@@ -141,7 +140,7 @@ export default function SettingsScreen() {
 
         <View style={styles.modelList}>
           <Text style={styles.modelItem}>
-            • LLM: {formatBytes(MODEL_SIZES.llm)} ({Platform.OS === 'ios' ? 'Phi-3.5 Mini' : 'Gemma 2 2B'})
+            • LLM: {formatBytes(MODEL_SIZES.llm)} (Llama 3.2 1B)
           </Text>
           <Text style={styles.modelItem}>
             • Whisper: {formatBytes(MODEL_SIZES.whisper)}

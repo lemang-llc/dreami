@@ -87,7 +87,7 @@ export default function OnboardingScreen() {
         </Text>
 
         <ModelDownloadCard
-          name={Platform.OS === 'ios' ? 'Phi-3.5 Mini' : 'Gemma 2 2B'}
+          name="Llama 3.2 1B"
           description="Dream analysis & chat"
           sizeBytes={MODEL_SIZES.llm}
           status={llm}

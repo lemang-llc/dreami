@@ -5,13 +5,13 @@ import { MODELS_DIR } from '../utils/fileSystem';
 const HF_BASE = 'https://huggingface.co';
 
 export const MODEL_URLS = {
-  // iOS: Phi-3.5 Mini Instruct Q4_K_M (~2.39 GB)
+  // Both platforms: Llama 3.2 1B Instruct Q4_K_M (~800 MB)
   llm_ios:
-    `${HF_BASE}/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf`,
+    `${HF_BASE}/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf`,
 
-  // Android: Gemma 2 2B IT Q4_K_M (~1.71 GB)
+  // Android: Llama 3.2 1B Instruct Q4_K_M (~800 MB)
   llm_android:
-    `${HF_BASE}/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf`,
+    `${HF_BASE}/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf`,
 
   // Whisper small.en GGML (~488 MB)
   whisper:
@@ -27,7 +27,7 @@ export const MODEL_URLS = {
 } as const;
 
 export const MODEL_PATHS = {
-  llm: MODELS_DIR + (Platform.OS === 'ios' ? 'phi-3.5-mini-q4km.gguf' : 'gemma-2-2b-q4km.gguf'),
+  llm: MODELS_DIR + 'llama-3.2-1b-q4km.gguf',
   whisper: MODELS_DIR + 'ggml-small.en.bin',
   whisper_coreml: MODELS_DIR + 'ggml-small.en-encoder.mlmodelc',
   embedding: MODELS_DIR + 'nomic-embed-text-v1.5-q8.gguf',
@@ -35,7 +35,7 @@ export const MODEL_PATHS = {
 
 // Expected file sizes in bytes (used for download verification)
 export const MODEL_SIZES = {
-  llm: Platform.OS === 'ios' ? 2_390_000_000 : 1_710_000_000,
+  llm: 800_000_000,
   whisper: 488_000_000,
   whisper_coreml: 150_000_000,
   embedding: 146_000_000,

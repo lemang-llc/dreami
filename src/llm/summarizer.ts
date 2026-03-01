@@ -3,6 +3,8 @@ import { SUMMARIZE_PROMPT } from './prompts';
 import { getDatabase } from '../db/client';
 import { dreams } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import { fileExists } from '../utils/fileSystem';
+import { MODEL_PATHS } from '../models/config';
 
 export interface DreamSummary {
   title: string;
@@ -13,8 +15,14 @@ export interface DreamSummary {
 
 const VALID_MOODS = ['vivid', 'anxious', 'peaceful', 'strange', 'dark', 'joyful', 'neutral'];
 
-export async function summarizeDream(transcript: string): Promise<DreamSummary> {
-  if (!transcript || transcript.trim().length < 20) {
+const SUMMARIZE_N_PREDICT = 256;
+
+export async function summarizeDream(
+  transcript: string,
+  onProgress?: (p: number) => void
+): Promise<DreamSummary> {
+  if (!transcript || transcript.length < 20) {
+    onProgress?.(1);
     return {
       title: 'Dream Entry',
       summary: 'A brief dream fragment.',
@@ -26,22 +34,26 @@ export async function summarizeDream(transcript: string): Promise<DreamSummary> 
   const ctx = await getLlmContext();
   const prompt = SUMMARIZE_PROMPT(transcript);
 
-  let fullText = '';
+  let tokensGenerated = 0;
 
-  await ctx.completion(
+  // Use the return value instead of accumulating token strings in JS.
+  // This keeps all string building on the native side and crosses the bridge
+  // only once at the end, avoiding heap pressure during token generation.
+  const result = await ctx.completion(
     {
       prompt,
-      n_predict: 256,
+      n_predict: SUMMARIZE_N_PREDICT,
       temperature: 0.3,
       top_p: 0.9,
       stop: ['\n\n', '```'],
     },
-    (data) => {
-      fullText += data.token;
+    (_data) => {
+      tokensGenerated++;
+      onProgress?.(tokensGenerated / SUMMARIZE_N_PREDICT);
     }
   );
 
-  return parseSummaryJson(fullText);
+  return parseSummaryJson(result.text);
 }
 
 function parseSummaryJson(text: string): DreamSummary {
@@ -77,7 +89,10 @@ function parseSummaryJson(text: string): DreamSummary {
  * Run full post-save processing: summarize + update DB.
  * Designed to be called in the background after a dream is saved.
  */
-export async function processDream(dreamId: number): Promise<void> {
+export async function processDream(
+  dreamId: number,
+  onProgress?: (p: number) => void
+): Promise<void> {
   const db = getDatabase();
 
   const [dream] = await db
@@ -85,18 +100,39 @@ export async function processDream(dreamId: number): Promise<void> {
     .from(dreams)
     .where(eq(dreams.id, dreamId));
 
-  if (!dream?.transcript) return;
+  if (!dream?.transcript) {
+    await db.update(dreams)
+      .set({ isProcessed: true, updatedAt: new Date().toISOString() })
+      .where(eq(dreams.id, dreamId));
+    return;
+  }
 
-  const summary = await summarizeDream(dream.transcript);
+  // Skip LLM if model not downloaded yet — mark processed so polling stops
+  const modelReady = await fileExists(MODEL_PATHS.llm);
+  if (!modelReady) {
+    await db.update(dreams)
+      .set({ isProcessed: true, updatedAt: new Date().toISOString() })
+      .where(eq(dreams.id, dreamId));
+    return;
+  }
 
-  await db
-    .update(dreams)
-    .set({
-      title: summary.title,
-      summary: summary.summary,
-      mood: summary.mood,
-      tags: JSON.stringify(summary.tags),
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(dreams.id, dreamId));
+  try {
+    const summary = await summarizeDream(dream.transcript, onProgress);
+    await db
+      .update(dreams)
+      .set({
+        title: summary.title,
+        summary: summary.summary,
+        mood: summary.mood,
+        tags: JSON.stringify(summary.tags),
+        isProcessed: true,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(dreams.id, dreamId));
+  } catch {
+    // Mark processed even on failure so the UI stops spinning
+    await db.update(dreams)
+      .set({ isProcessed: true, updatedAt: new Date().toISOString() })
+      .where(eq(dreams.id, dreamId));
+  }
 }

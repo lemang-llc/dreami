@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import { MODEL_URLS, MODEL_PATHS, MODEL_SIZES } from '../models/config';
 import { fileExists, verifyFileSize } from '../utils/fileSystem';
@@ -93,7 +93,15 @@ export function useModelStatus() {
 
         setter({ downloaded: true, downloading: false, progress: 1, error: null });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Download failed';
+        let msg = e instanceof Error ? e.message : 'Download failed';
+        // Translate common system errors into friendly messages
+        if (msg.includes('No space left on device') || msg.includes('Code=28')) {
+          msg = 'Not enough storage space. Free up space in Settings → General → iPhone Storage and try again.';
+        } else if (msg.includes('Code=-1009') || msg.includes('offline') || msg.includes('network')) {
+          msg = 'No internet connection. Connect to Wi-Fi and try again.';
+        } else if (msg.includes('Code=-1001') || msg.includes('timed out')) {
+          msg = 'Download timed out. Check your connection and try again.';
+        }
         setter((s) => ({ ...s, downloading: false, error: msg }));
         throw e;
       }

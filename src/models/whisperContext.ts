@@ -1,4 +1,4 @@
-import { initWhisper, WhisperContext } from 'whisper.rn';
+import type { WhisperContext } from 'whisper.rn';
 import { MODEL_PATHS } from './config';
 
 let _context: WhisperContext | null = null;
@@ -8,16 +8,20 @@ export async function getWhisperContext(): Promise<WhisperContext> {
   if (_context) return _context;
   if (_initPromise) return _initPromise;
 
-  _initPromise = initWhisper({
-    filePath: MODEL_PATHS.whisper,
-    // whisper.rn auto-detects the Core ML encoder on iOS if the
-    // .mlmodelc directory exists alongside the .bin file
-  }).then((ctx: WhisperContext) => {
+  _initPromise = (async () => {
+    const { initWhisper } = await import('whisper.rn');
+    const ctx = await initWhisper({
+      filePath: MODEL_PATHS.whisper,
+    });
     _context = ctx;
     return ctx;
-  });
+  })();
 
   return _initPromise;
+}
+
+export function isWhisperLoaded(): boolean {
+  return _context !== null;
 }
 
 export async function releaseWhisperContext(): Promise<void> {

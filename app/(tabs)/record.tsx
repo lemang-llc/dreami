@@ -16,8 +16,6 @@ import { TranscriptEditor } from '../../src/components/TranscriptEditor';
 import { getDatabase } from '../../src/db/client';
 import { dreams } from '../../src/db/schema';
 import { useDreamStore } from '../../src/stores/dreamStore';
-import { indexDream } from '../../src/rag/pipeline';
-import { processDream } from '../../src/llm/summarizer';
 
 export default function RecordScreen() {
   const { isRecording, waveformBars, start, stop } = useRecorder();
@@ -71,15 +69,11 @@ export default function RecordScreen() {
 
       const dreamId = inserted.id;
 
-      // Navigate to the new dream immediately
+      // Navigate to the new dream immediately.
+      // Neither embedding nor LLM summarization is triggered here —
+      // both load heavy native models and will be run together when
+      // the user presses "Re-analyse" on the dream detail screen.
       router.replace(`/dream/${dreamId}`);
-
-      // Run RAG indexing + summarization in background
-      // (don't block the navigation)
-      Promise.all([
-        indexDream(dreamId, transcript.trim()),
-        processDream(dreamId),
-      ]).catch((e) => console.error('Background processing error:', e));
 
       store.reset();
     } catch (e) {

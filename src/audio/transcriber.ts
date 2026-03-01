@@ -1,4 +1,4 @@
-import { getWhisperContext } from '../models/whisperContext';
+import { getWhisperContext, releaseWhisperContext } from '../models/whisperContext';
 
 export interface TranscriptionResult {
   text: string;
@@ -13,7 +13,6 @@ export async function transcribeAudio(
 
   const { stop, promise } = whisper.transcribe(audioFileUri, {
     language: 'en',
-    maxLen: 1,
     tokenTimestamps: false,
     onProgress: onProgress
       ? (p: number) => onProgress(p / 100)
@@ -21,6 +20,9 @@ export async function transcribeAudio(
   });
 
   const result = await promise;
+
+  // Release immediately so iOS can reclaim the ~638 MB before the LLM loads.
+  await releaseWhisperContext();
 
   return {
     text: result.result.trim(),

@@ -32,7 +32,7 @@ export async function sendChatMessage(
       ? CHAT_SYSTEM_PROMPT(context)
       : EMPTY_JOURNAL_PROMPT;
 
-  // Build conversation prompt in ChatML format (works for both Phi and Gemma)
+  // Build conversation prompt in ChatML format
   const historyText = conversationHistory
     .slice(-6) // Last 3 exchanges to stay within context
     .map((m) =>
@@ -51,9 +51,7 @@ export async function sendChatMessage(
     .filter(Boolean)
     .join('\n');
 
-  let fullResponse = '';
-
-  await ctx.completion(
+  const result = await ctx.completion(
     {
       prompt,
       n_predict: 512,
@@ -63,11 +61,10 @@ export async function sendChatMessage(
       stop: ['<|end|>', '<|user|>', '<|system|>'],
     },
     (data) => {
-      fullResponse += data.token;
       onToken(data.token);
     }
   );
 
   onComplete?.();
-  return fullResponse.trim();
+  return result.text;
 }

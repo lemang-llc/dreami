@@ -1,10 +1,32 @@
 import {
-  AudioRecorder,
-  RecordingPresets,
+  AudioModule,
+  IOSOutputFormat,
   setAudioModeAsync,
   requestRecordingPermissionsAsync,
 } from 'expo-audio';
-import * as FileSystem from 'expo-file-system';
+
+// AudioRecorder is not exported directly; it lives on the native AudioModule
+const AudioRecorder = AudioModule.AudioRecorder;
+
+// whisper.rn requires 16kHz mono PCM — record in that format directly
+// to avoid lossy format conversion at transcription time.
+const WHISPER_RECORDING_OPTIONS = {
+  extension: '.wav',
+  sampleRate: 16000,
+  numberOfChannels: 1,
+  bitRate: 256000,
+  ios: {
+    outputFormat: IOSOutputFormat.LINEARPCM,
+    linearPCMBitDepth: 16 as const,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  android: {
+    outputFormat: 'wav' as any,
+    audioEncoder: 'pcm_16bit' as any,
+  },
+};
+import * as FileSystem from 'expo-file-system/legacy';
 import { RECORDINGS_DIR } from '../utils/fileSystem';
 
 export type RecorderState = 'idle' | 'recording' | 'stopped';
@@ -14,7 +36,7 @@ export interface RecordingResult {
   durationMs: number;
 }
 
-let _recorder: AudioRecorder | null = null;
+let _recorder: InstanceType<typeof AudioRecorder> | null = null;
 let _startTime: number = 0;
 
 export async function requestMicrophonePermission(): Promise<boolean> {
@@ -33,7 +55,7 @@ export async function startRecording(): Promise<void> {
   });
 
   _recorder = new AudioRecorder({
-    ...RecordingPresets.HIGH_QUALITY,
+    ...WHISPER_RECORDING_OPTIONS,
     isMeteringEnabled: true,
   });
 

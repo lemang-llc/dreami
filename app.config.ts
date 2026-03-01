@@ -12,6 +12,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
     backgroundColor: '#0a0a1a',
+    // splash-icon.png exists in the template assets
   },
   ios: {
     supportsTablet: false,
@@ -24,7 +25,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     adaptiveIcon: {
-      foregroundImage: './assets/adaptive-icon.png',
+      foregroundImage: './assets/android-icon-foreground.png',
+      backgroundImage: './assets/android-icon-background.png',
+      monochromeImage: './assets/android-icon-monochrome.png',
       backgroundColor: '#0a0a1a',
     },
     package: 'com.dreamdiary.app',
@@ -35,14 +38,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'llama.rn',
       {
-        enableOpenCL: true,
+        enableOpenCLAndHexagon: true,
       },
     ],
     'expo-audio',
     [
       'expo-notifications',
       {
-        icon: './assets/notification-icon.png',
         color: '#6c63ff',
       },
     ],
@@ -56,7 +58,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         },
       },
     ],
+    'expo-system-ui',
     './plugins/withLargeHeap',
+    './plugins/withFollyFix',
     'expo-router',
   ],
   experiments: {

@@ -17,16 +17,6 @@ export const dreams = sqliteTable('dreams', {
   isProcessed: int('is_processed', { mode: 'boolean' }).notNull().default(false),
 });
 
-export const dreamChunks = sqliteTable('dream_chunks', {
-  id: int('id').primaryKey({ autoIncrement: true }),
-  dreamId: int('dream_id')
-    .notNull()
-    .references(() => dreams.id, { onDelete: 'cascade' }),
-  chunkText: text('chunk_text').notNull(),
-  embedding: text('embedding').notNull(), // JSON: "[0.12, -0.34, ...]"
-  chunkIdx: int('chunk_idx').notNull(),
-});
-
 export const appSettings = sqliteTable('app_settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
@@ -34,5 +24,4 @@ export const appSettings = sqliteTable('app_settings', {
 
 export type Dream = typeof dreams.$inferSelect;
 export type NewDream = typeof dreams.$inferInsert;
-export type DreamChunk = typeof dreamChunks.$inferSelect;
 export type AppSetting = typeof appSettings.$inferSelect;

@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export const MODELS_DIR = FileSystem.documentDirectory + 'models/';
 export const RECORDINGS_DIR = FileSystem.documentDirectory + 'recordings/';
