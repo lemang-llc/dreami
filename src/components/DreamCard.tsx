@@ -33,10 +33,15 @@ export function DreamCard({ dream, onPress }: DreamCardProps) {
 
   const moodColor = MOOD_COLORS[dream.mood ?? 'neutral'] ?? MOOD_COLORS.neutral;
 
-  const dateStr = new Date(dream.createdAt).toLocaleDateString('en-US', {
+  const _date = new Date(dream.createdAt);
+  const dateStr = _date.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+  });
+  const timeStr = _date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
   });
 
   return (
@@ -62,7 +67,7 @@ export function DreamCard({ dream, onPress }: DreamCardProps) {
       )}
 
       <View style={styles.footer}>
-        <Text style={styles.date}>{dateStr}</Text>
+        <Text style={styles.date}>{timeStr} · {dateStr}</Text>
         <View style={styles.tags}>
           {tags.slice(0, 3).map((tag) => (
             <View key={tag} style={styles.tag}>
