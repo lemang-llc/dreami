@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   Alert,
+  AppState,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
@@ -18,7 +19,7 @@ import { useAppStore } from '../../src/stores/appStore';
 import { ensureDirectoriesExist } from '../../src/utils/fileSystem';
 
 export default function OnboardingScreen() {
-  const { llm, embed, whisper, checkDownloaded, downloadAll, allDownloaded } =
+  const { llm, embed, whisper, checkDownloaded, downloadAll, allDownloaded, resumeInterruptedDownloads } =
     useModelStatus();
   const { setOnboardingComplete } = useAppStore();
   const [checking, setChecking] = useState(true);
@@ -27,11 +28,21 @@ export default function OnboardingScreen() {
   useEffect(() => {
     async function check() {
       await ensureDirectoriesExist();
+      // Resume any downloads that were interrupted by an app kill.
+      await resumeInterruptedDownloads();
+      // Refresh the downloaded/pending status for models that aren't resuming.
       await checkDownloaded();
       setChecking(false);
     }
     check();
-  }, [checkDownloaded]);
+
+    // When the app returns to the foreground (e.g. after screen lock), re-check
+    // whether any background downloads finished while the screen was off.
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') checkDownloaded();
+    });
+    return () => sub.remove();
+  }, [checkDownloaded, resumeInterruptedDownloads]);
 
   const handleDownload = async () => {
     setDownloading(true);

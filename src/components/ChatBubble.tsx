@@ -1,12 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { ChatMessage } from '../llm/chat';
 
 interface ChatBubbleProps {
   message: ChatMessage;
+  isSpeaking?: boolean;
+  onSpeak?: () => void;
 }
 
-export function ChatBubble({ message }: ChatBubbleProps) {
+export function ChatBubble({ message, isSpeaking = false, onSpeak }: ChatBubbleProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -16,12 +18,23 @@ export function ChatBubble({ message }: ChatBubbleProps) {
           {message.content}
         </Text>
       </View>
-      <Text style={styles.time}>
-        {new Date(message.timestamp).toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-        })}
-      </Text>
+
+      <View style={styles.meta}>
+        {/* Speaker button — only on assistant messages */}
+        {!isUser && onSpeak && (
+          <Pressable onPress={onSpeak} style={styles.speakBtn} hitSlop={8}>
+            <Text style={[styles.speakIcon, isSpeaking && styles.speakIconActive]}>
+              {isSpeaking ? '⏹' : '🔊'}
+            </Text>
+          </Pressable>
+        )}
+        <Text style={styles.time}>
+          {new Date(message.timestamp).toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -82,11 +95,26 @@ const styles = StyleSheet.create({
   assistantText: {
     color: '#e2e8f0',
   },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+    marginHorizontal: 4,
+  },
+  speakBtn: {
+    padding: 2,
+  },
+  speakIcon: {
+    fontSize: 13,
+    opacity: 0.5,
+  },
+  speakIconActive: {
+    opacity: 1,
+  },
   time: {
     color: '#475569',
     fontSize: 11,
-    marginTop: 3,
-    marginHorizontal: 4,
   },
   cursor: {
     color: '#a78bfa',

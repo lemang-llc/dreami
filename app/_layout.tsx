@@ -22,6 +22,9 @@ export default function RootLayout() {
   const { setOnboardingComplete, onboardingComplete } = useAppStore();
   const [isReady, setIsReady] = useState(false);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  // Screen to navigate to once the app finishes initialising (cold-start
+  // notification launches deliver the response before the listener registers).
+  const pendingNavRef = useRef<string | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -43,24 +46,38 @@ export default function RootLayout() {
         await scheduleNotification(notifSettings);
       }
 
+      // Cold-start: the notification response that launched the app is
+      // available here but won't fire on the listener registered below.
+      if (complete) {
+        const last = await Notifications.getLastNotificationResponseAsync();
+        const screen = last?.notification.request.content.data?.screen as string | undefined;
+        if (screen) pendingNavRef.current = screen;
+      }
+
       setIsReady(true);
     }
 
     init();
 
-    // Notification tap listener: deep-link to record screen
+    // Foreground / background tap: navigate immediately (router is ready).
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
         const screen = response.notification.request.content.data?.screen;
-        if (screen) {
-          router.push(screen as any);
-        }
+        if (screen) router.navigate(screen as any);
       });
 
     return () => {
       responseListener.current?.remove();
     };
   }, [setOnboardingComplete]);
+
+  // Execute the cold-start navigation once the Stack is mounted and ready.
+  useEffect(() => {
+    if (isReady && onboardingComplete && pendingNavRef.current) {
+      router.navigate(pendingNavRef.current as any);
+      pendingNavRef.current = null;
+    }
+  }, [isReady, onboardingComplete]);
 
   if (!isReady) {
     return (

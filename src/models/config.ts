@@ -53,4 +53,9 @@ export const SETTINGS_KEYS = {
   WHISPER_MODEL_DOWNLOADED: 'whisper_model_downloaded',
   WHISPER_COREML_DOWNLOADED: 'whisper_coreml_downloaded',
   ONBOARDING_COMPLETE: 'onboarding_complete',
+  // Set when a download starts, cleared when it completes or errors.
+  // Lets the onboarding screen auto-resume interrupted downloads on next launch.
+  DOWNLOAD_PENDING_LLM: 'dl_pending_llm',
+  DOWNLOAD_PENDING_EMBED: 'dl_pending_embed',
+  DOWNLOAD_PENDING_WHISPER: 'dl_pending_whisper',
 } as const;

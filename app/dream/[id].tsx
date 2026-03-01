@@ -42,6 +42,18 @@ export default function DreamDetailScreen() {
   // Only flush to state at a throttled rate.
   const progressRef = useRef(0);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Safe back navigation: go back in the stack if possible, otherwise fall
+  // back to the Dreams tab. This handles entry paths that have no back stack
+  // (deep links, cold-start notification taps, etc.).
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.navigate('/(tabs)');
+    }
+  };
+
   // Guard setState / Alert calls against the unmounted-component case
   // (user navigates back while analysis is still running).
   const isMountedRef = useRef(true);
@@ -72,7 +84,7 @@ export default function DreamDetailScreen() {
         isReprocessing ? (
           // During analysis: "Done" navigates back while processing continues
           // in the background. isMountedRef guards prevent stale setState calls.
-          <Pressable onPress={() => router.back()} style={{ marginRight: 16 }}>
+          <Pressable onPress={goBack} style={{ marginRight: 16 }}>
             <Text style={{ color: '#a78bfa', fontSize: 16 }}>Done</Text>
           </Pressable>
         ) : (
@@ -122,7 +134,7 @@ export default function DreamDetailScreen() {
           if (!dream) return;
           const db = getDatabase();
           await db.delete(dreams).where(eq(dreams.id, dream.id));
-          router.back();
+          goBack();
         },
       },
     ]);

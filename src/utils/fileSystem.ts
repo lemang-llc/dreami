@@ -21,6 +21,21 @@ export async function getFileSize(path: string): Promise<number> {
   return (info as FileSystem.FileInfo & { size: number }).size ?? 0;
 }
 
+/**
+ * Returns true if the file exists and is at least 50 % of the expected size.
+ *
+ * This is intentionally lenient: MODEL_SIZES are display estimates and the
+ * actual GGUF file served by HuggingFace may differ.  50 % still catches
+ * genuinely partial / empty downloads while tolerating real size mismatches.
+ */
+export async function isFileSufficient(
+  path: string,
+  expectedBytes: number,
+): Promise<boolean> {
+  const size = await getFileSize(path);
+  return size >= expectedBytes * 0.5;
+}
+
 export async function verifyFileSize(
   path: string,
   expectedBytes: number,

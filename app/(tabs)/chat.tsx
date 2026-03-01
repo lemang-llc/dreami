@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,35 +9,80 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useChatStore } from '../../src/stores/chatStore';
 import { ChatBubble, StreamingBubble } from '../../src/components/ChatBubble';
 import { sendChatMessage, ChatMessage } from '../../src/llm/chat';
+import {
+  requestMicrophonePermission,
+  startRecording,
+  stopRecording,
+  isCurrentlyRecording,
+  getMetering,
+} from '../../src/audio/recorder';
+import { transcribeAudio } from '../../src/audio/transcriber';
+import { speakText, stopSpeaking } from '../../src/audio/tts';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+
+type VoiceState = 'idle' | 'recording' | 'transcribing';
+type ConvPhase = 'listening' | 'transcribing' | 'generating' | 'speaking';
+
+// dBFS below this counts as silence; speech typically peaks above -25
+const SILENCE_DB = -40;
+// How long silence must persist (after speech starts) to auto-send
+const SILENCE_AFTER_SPEECH_MS = 1200;
 
 export default function ChatScreen() {
-  const { messages, isGenerating, streamingContent, addMessage, appendStreamToken, finalizeStream, setIsGenerating } = useChatStore();
+  const {
+    messages,
+    isGenerating,
+    streamingContent,
+    addMessage,
+    appendStreamToken,
+    finalizeStream,
+    setIsGenerating,
+  } = useChatStore();
+
   const [inputText, setInputText] = useState('');
+  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [isConversing, setIsConversing] = useState(false);
+  const [convPhase, setConvPhase] = useState<ConvPhase>('listening');
+
   const flatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
+  const isMountedRef = useRef(true);
+  const isConversingRef = useRef(false);
+  const vadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      isConversingRef.current = false;
+      if (vadIntervalRef.current) clearInterval(vadIntervalRef.current);
+      stopSpeaking();
+      deactivateKeepAwake();
+    };
+  }, []);
 
   const scrollToBottom = useCallback(() => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, []);
+
+  // ─── Manual chat send ───────────────────────────────────────────────────────
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text || isGenerating) return;
+    if (!text || isGenerating || voiceState !== 'idle' || isConversing) return;
 
     setInputText('');
-
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
       content: text,
       timestamp: Date.now(),
     };
-
     addMessage(userMsg);
     setIsGenerating(true);
     scrollToBottom();
@@ -47,23 +92,214 @@ export default function ChatScreen() {
       await sendChatMessage(
         text,
         messages,
-        (token) => {
-          appendStreamToken(token);
-          fullResponse += token;
-          scrollToBottom();
-        },
-        () => {
-          finalizeStream(fullResponse);
-          scrollToBottom();
-        }
+        (token) => { appendStreamToken(token); fullResponse += token; scrollToBottom(); },
+        () => { finalizeStream(fullResponse); scrollToBottom(); },
       );
-    } catch (e) {
+    } catch {
       finalizeStream('Sorry, something went wrong. Please try again.');
     }
   };
 
+  // ─── Manual voice input ─────────────────────────────────────────────────────
+
+  const handleVoicePress = async () => {
+    if (speakingId) { await stopSpeaking(); setSpeakingId(null); }
+
+    if (voiceState === 'recording') {
+      setVoiceState('transcribing');
+      try {
+        const result = await stopRecording();
+        const transcription = await transcribeAudio(result.uri);
+        const text = transcription.text.trim();
+        if (text) {
+          setInputText(text);
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }
+      } catch {
+        Alert.alert('Transcription Failed', 'Could not transcribe your voice. Please try again.');
+      } finally {
+        setVoiceState('idle');
+      }
+    } else if (voiceState === 'idle') {
+      const granted = await requestMicrophonePermission();
+      if (!granted) {
+        Alert.alert('Microphone Access', 'Please grant microphone permission to use voice input.', [{ text: 'OK' }]);
+        return;
+      }
+      try {
+        await startRecording();
+        setVoiceState('recording');
+      } catch {
+        Alert.alert('Recording Failed', 'Could not start recording.');
+      }
+    }
+  };
+
+  // ─── Manual TTS ─────────────────────────────────────────────────────────────
+
+  const handleSpeak = useCallback((msg: ChatMessage) => {
+    if (speakingId === msg.id) {
+      stopSpeaking();
+      setSpeakingId(null);
+    } else {
+      speakText(msg.content, () => setSpeakingId(null));
+      setSpeakingId(msg.id);
+    }
+  }, [speakingId]);
+
+  // ─── Conversation mode ──────────────────────────────────────────────────────
+
+  /**
+   * Records until the user stops speaking (VAD), then transcribes.
+   * Resolves with the transcript string, or null if interrupted / no speech.
+   */
+  const listenAndTranscribeOnce = (): Promise<string | null> =>
+    new Promise((resolve) => {
+      if (!isConversingRef.current) { resolve(null); return; }
+      setConvPhase('listening');
+      setVoiceState('recording');
+
+      startRecording().then(() => {
+        let hasSpeech = false;
+        let silenceSince: number | null = null;
+
+        const iv = setInterval(() => {
+          if (!isConversingRef.current) {
+            clearInterval(iv);
+            vadIntervalRef.current = null;
+            resolve(null);
+            return;
+          }
+
+          const db = getMetering();
+          if (db > SILENCE_DB) {
+            hasSpeech = true;
+            silenceSince = null;
+          } else if (hasSpeech) {
+            if (!silenceSince) { silenceSince = Date.now(); return; }
+            if (Date.now() - silenceSince < SILENCE_AFTER_SPEECH_MS) return;
+
+            // Sustained silence after speech → stop and transcribe
+            clearInterval(iv);
+            vadIntervalRef.current = null;
+            setConvPhase('transcribing');
+            setVoiceState('transcribing');
+            stopRecording()
+              .then((r) => transcribeAudio(r.uri))
+              .then((t) => resolve(t.text.trim() || null))
+              .catch(() => resolve(null));
+          }
+        }, 100);
+
+        vadIntervalRef.current = iv;
+      }).catch(() => resolve(null));
+    });
+
+  /**
+   * Sends text to the LLM and resolves with the complete response.
+   * Uses getState() to read the latest message history (avoids stale closure).
+   */
+  const generateResponse = (text: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      // Snapshot history before adding the new user message
+      const history = useChatStore.getState().messages;
+      const userMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: text,
+        timestamp: Date.now(),
+      };
+      addMessage(userMsg);
+      setIsGenerating(true);
+      setConvPhase('generating');
+      setVoiceState('idle');
+      setInputText('');
+      scrollToBottom();
+
+      let fullResponse = '';
+      sendChatMessage(
+        text,
+        history,
+        (token) => { appendStreamToken(token); fullResponse += token; scrollToBottom(); },
+        () => { finalizeStream(fullResponse); scrollToBottom(); resolve(fullResponse); },
+      ).catch(reject);
+    });
+
+  /**
+   * Speaks text aloud and resolves when the utterance is complete.
+   */
+  const speakAndWait = (text: string): Promise<void> =>
+    new Promise((resolve) => {
+      if (!isConversingRef.current) { resolve(); return; }
+      setConvPhase('speaking');
+      const id = `conv_${Date.now()}`;
+      setSpeakingId(id);
+      speakText(text, () => { setSpeakingId(null); resolve(); });
+    });
+
+  /**
+   * The main conversation loop: listen → transcribe → generate → speak → repeat.
+   */
+  const runConversationLoop = async () => {
+    while (isConversingRef.current && isMountedRef.current) {
+      try {
+        const spoken = await listenAndTranscribeOnce();
+        if (!spoken || !isConversingRef.current) continue;
+
+        setInputText(spoken); // briefly show what was heard
+
+        const response = await generateResponse(spoken);
+        if (!isConversingRef.current) break;
+
+        await speakAndWait(response);
+      } catch {
+        if (!isConversingRef.current || !isMountedRef.current) break;
+        await new Promise((r) => setTimeout(r, 500)); // brief pause on error before retrying
+      }
+    }
+
+    if (isMountedRef.current) {
+      setConvPhase('listening');
+      setVoiceState('idle');
+      setInputText('');
+    }
+  };
+
+  const startConversation = async () => {
+    const granted = await requestMicrophonePermission();
+    if (!granted) {
+      Alert.alert('Microphone Access', 'Please grant microphone permission to use voice conversation.', [{ text: 'OK' }]);
+      return;
+    }
+    isConversingRef.current = true;
+    setIsConversing(true);
+    await activateKeepAwakeAsync();
+    runConversationLoop(); // fire-and-forget
+  };
+
+  const stopConversation = async () => {
+    isConversingRef.current = false;
+    setIsConversing(false);
+    deactivateKeepAwake();
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
+    await stopSpeaking();
+    setSpeakingId(null);
+    if (isCurrentlyRecording()) {
+      try { await stopRecording(); } catch {}
+    }
+  };
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   const renderItem = ({ item }: { item: ChatMessage }) => (
-    <ChatBubble message={item} />
+    <ChatBubble
+      message={item}
+      isSpeaking={speakingId === item.id}
+      onSpeak={() => handleSpeak(item)}
+    />
   );
 
   const renderEmpty = () => (
@@ -79,11 +315,7 @@ export default function ChatScreen() {
           'Are there recurring themes?',
           'What does water mean in my dreams?',
         ].map((s) => (
-          <Pressable
-            key={s}
-            style={styles.suggestion}
-            onPress={() => setInputText(s)}
-          >
+          <Pressable key={s} style={styles.suggestion} onPress={() => setInputText(s)}>
             <Text style={styles.suggestionText}>{s}</Text>
           </Pressable>
         ))}
@@ -91,7 +323,15 @@ export default function ChatScreen() {
     </View>
   );
 
+  const convPhaseLabel: Record<ConvPhase, string> = {
+    listening: '🎤  Listening…',
+    transcribing: '⚙️  Transcribing…',
+    generating: '🤔  Thinking…',
+    speaking: '🔊  Speaking…',
+  };
+
   const showStreaming = isGenerating && streamingContent.length > 0;
+  const isBusy = isGenerating || voiceState !== 'idle';
 
   return (
     <KeyboardAvoidingView
@@ -104,6 +344,7 @@ export default function ChatScreen() {
         data={messages}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
+        extraData={speakingId}
         ListEmptyComponent={renderEmpty}
         ListFooterComponent={
           showStreaming ? (
@@ -111,36 +352,81 @@ export default function ChatScreen() {
           ) : isGenerating ? (
             <View style={styles.thinkingIndicator}>
               <ActivityIndicator color="#a78bfa" size="small" />
-              <Text style={styles.thinkingText}>Thinking...</Text>
+              <Text style={styles.thinkingText}>Thinking…</Text>
             </View>
           ) : null
         }
-        contentContainerStyle={
-          messages.length === 0 ? styles.emptyContainer : styles.listContent
-        }
+        contentContainerStyle={messages.length === 0 ? styles.emptyContainer : styles.listContent}
         onContentSizeChange={scrollToBottom}
       />
 
       <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Ask about your dreams..."
-          placeholderTextColor="#475569"
-          multiline
-          maxLength={500}
-          returnKeyType="send"
-          onSubmitEditing={handleSend}
-          blurOnSubmit={false}
-        />
-        <Pressable
-          style={[styles.sendBtn, (!inputText.trim() || isGenerating) && styles.sendBtnDisabled]}
-          onPress={handleSend}
-          disabled={!inputText.trim() || isGenerating}
-        >
-          <Text style={styles.sendBtnText}>↑</Text>
-        </Pressable>
+        {isConversing ? (
+          // ── Conversation mode ──
+          <>
+            <View style={styles.convStatus}>
+              <Text style={styles.convStatusText}>{convPhaseLabel[convPhase]}</Text>
+            </View>
+            <Pressable style={styles.stopConvBtn} onPress={stopConversation}>
+              <Text style={styles.stopConvBtnText}>✕ End</Text>
+            </Pressable>
+          </>
+        ) : (
+          // ── Normal mode ──
+          <>
+            {/* Start conversation button */}
+            <Pressable
+              style={[styles.convBtn, isBusy && styles.convBtnDisabled]}
+              onPress={startConversation}
+              disabled={isBusy}
+            >
+              <Text style={styles.convBtnText}>🎧</Text>
+            </Pressable>
+
+            <TextInput
+              ref={inputRef}
+              style={[styles.input, voiceState === 'recording' && styles.inputRecording]}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder={
+                voiceState === 'recording'
+                  ? 'Listening… tap ⏹ to finish'
+                  : voiceState === 'transcribing'
+                  ? 'Transcribing…'
+                  : 'Ask about your dreams…'
+              }
+              placeholderTextColor={voiceState === 'recording' ? '#f87171' : '#475569'}
+              multiline
+              maxLength={500}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+              blurOnSubmit={false}
+              editable={voiceState === 'idle'}
+            />
+
+            {/* Mic / stop-recording button */}
+            <Pressable
+              style={[styles.micBtn, voiceState === 'recording' && styles.micBtnRecording]}
+              onPress={handleVoicePress}
+              disabled={voiceState === 'transcribing' || isGenerating}
+            >
+              {voiceState === 'transcribing' ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.micBtnText}>{voiceState === 'recording' ? '⏹' : '🎙'}</Text>
+              )}
+            </Pressable>
+
+            {/* Send button */}
+            <Pressable
+              style={[styles.sendBtn, (isBusy || !inputText.trim()) && styles.sendBtnDisabled]}
+              onPress={handleSend}
+              disabled={isBusy || !inputText.trim()}
+            >
+              <Text style={styles.sendBtnText}>↑</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -216,7 +502,52 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#1a1a2e',
     gap: 8,
-    alignItems: 'flex-end',
+    alignItems: 'center',
+  },
+  // ── Conversation mode ──
+  convStatus: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#a78bfa',
+  },
+  convStatusText: {
+    color: '#a78bfa',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  stopConvBtn: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#f87171',
+  },
+  stopConvBtnText: {
+    color: '#f87171',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  // ── Normal mode ──
+  convBtn: {
+    backgroundColor: '#1a1a2e',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2d2d4e',
+  },
+  convBtnDisabled: {
+    opacity: 0.4,
+  },
+  convBtnText: {
+    fontSize: 17,
   },
   input: {
     flex: 1,
@@ -229,6 +560,26 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     borderWidth: 1,
     borderColor: '#2d2d4e',
+  },
+  inputRecording: {
+    borderColor: '#f87171',
+  },
+  micBtn: {
+    backgroundColor: '#1a1a2e',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2d2d4e',
+  },
+  micBtnRecording: {
+    backgroundColor: '#7f1d1d',
+    borderColor: '#f87171',
+  },
+  micBtnText: {
+    fontSize: 17,
   },
   sendBtn: {
     backgroundColor: '#6c63ff',

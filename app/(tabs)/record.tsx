@@ -69,11 +69,9 @@ export default function RecordScreen() {
 
       const dreamId = inserted.id;
 
-      // Navigate to the new dream immediately.
-      // Neither embedding nor LLM summarization is triggered here —
-      // both load heavy native models and will be run together when
-      // the user presses "Re-analyse" on the dream detail screen.
-      router.replace(`/dream/${dreamId}`);
+      // Push (not replace) so the tab stack stays in history and the
+      // native back button is visible on the dream detail screen.
+      router.push(`/dream/${dreamId}`);
 
       store.reset();
     } catch (e) {
