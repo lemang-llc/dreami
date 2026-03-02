@@ -276,11 +276,24 @@ export default function DreamDetailScreen() {
         </View>
       ) : (
         !isEditing && (
-          <Pressable style={styles.reprocessBtn} onPress={handleReprocess}>
-            <Text style={styles.reprocessBtnText}>
-              {dream.isProcessed ? '↺  Re-analyse with AI' : '✦  Analyse with AI'}
-            </Text>
-          </Pressable>
+          <>
+            <Pressable style={styles.reprocessBtn} onPress={handleReprocess}>
+              <Text style={styles.reprocessBtnText}>
+                {dream.isProcessed ? '↺  Re-analyse with AI' : '✦  Analyse with AI'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.chatBtn}
+              onPress={() =>
+                router.navigate({
+                  pathname: '/(tabs)/chat',
+                  params: { dreamId: String(dream.id) },
+                })
+              }
+            >
+              <Text style={styles.chatBtnText}>💬  Chat about this dream</Text>
+            </Pressable>
+          </>
         )
       )}
 
@@ -566,10 +579,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#2d2d4e',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   reprocessBtnText: {
     color: '#a78bfa',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  chatBtn: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2d2d4e',
+    marginBottom: 16,
+  },
+  chatBtnText: {
+    color: '#60a5fa',
     fontSize: 14,
     fontWeight: '600',
   },

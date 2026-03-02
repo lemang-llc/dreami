@@ -32,7 +32,16 @@ export async function summarizeDream(
   }
 
   const ctx = await getLlmContext();
-  const prompt = SUMMARIZE_PROMPT(transcript);
+
+  // Wrap in Llama 3.2 Instruct format so the model understands the task.
+  const rawPrompt = SUMMARIZE_PROMPT(transcript);
+  const prompt = [
+    '<|begin_of_text|>',
+    '<|start_header_id|>user<|end_header_id|>\n\n',
+    rawPrompt,
+    '<|eot_id|>',
+    '<|start_header_id|>assistant<|end_header_id|>\n\n',
+  ].join('');
 
   let tokensGenerated = 0;
 
@@ -45,7 +54,7 @@ export async function summarizeDream(
       n_predict: SUMMARIZE_N_PREDICT,
       temperature: 0.3,
       top_p: 0.9,
-      stop: ['\n\n', '```'],
+      stop: ['<|eot_id|>', '<|end_of_text|>'],
     },
     (_data) => {
       tokensGenerated++;

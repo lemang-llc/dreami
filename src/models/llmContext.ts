@@ -28,7 +28,7 @@ export async function getLlmContext(): Promise<LlamaContext> {
       throw new Error('LLM model not downloaded. Complete onboarding first.');
     }
     const gpuLayers = getGpuLayers();
-    const nCtx = 1024;
+    const nCtx = 2048;
     console.log(`[LLM] Loading model: n_gpu_layers=${gpuLayers} n_ctx=${nCtx}`);
     try {
       const { initLlama } = await import('llama.rn');

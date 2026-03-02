@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,9 +24,39 @@ import {
 import { transcribeAudio } from '../../src/audio/transcriber';
 import { speakText, stopSpeaking } from '../../src/audio/tts';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { useLocalSearchParams } from 'expo-router';
+import { getDatabase } from '../../src/db/client';
+import { dreams, Dream } from '../../src/db/schema';
+import { eq } from 'drizzle-orm';
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 type ConvPhase = 'listening' | 'transcribing' | 'generating' | 'speaking';
+
+// ─── Dream context helper ─────────────────────────────────────────────────────
+
+function buildPinnedContext(dream: Dream): string {
+  const tags: string[] = (() => {
+    try { return JSON.parse(dream.tags ?? '[]'); } catch { return []; }
+  })();
+  const date = new Date(dream.createdAt).toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
+  // Prefer the compact AI-generated summary; fall back to a truncated excerpt
+  // of the raw transcript to stay well within the 1B model's context window.
+  const MAX_TRANSCRIPT = 500;
+  const body = dream.summary
+    ? `Summary: ${dream.summary}`
+    : `Excerpt: ${dream.transcript.slice(0, MAX_TRANSCRIPT).trim()}${dream.transcript.length > MAX_TRANSCRIPT ? '…' : ''}`;
+
+  return [
+    `Title: "${dream.title || 'Untitled Dream'}"`,
+    `Recorded: ${date}`,
+    dream.mood ? `Mood: ${dream.mood}` : null,
+    tags.length ? `Tags: ${tags.join(', ')}` : null,
+    body,
+  ].filter(Boolean).join('\n');
+}
 
 // dBFS below this counts as silence; speech typically peaks above -25
 const SILENCE_DB = -40;
@@ -49,6 +79,24 @@ export default function ChatScreen() {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [isConversing, setIsConversing] = useState(false);
   const [convPhase, setConvPhase] = useState<ConvPhase>('listening');
+  const [focusDream, setFocusDream] = useState<Dream | null>(null);
+
+  // Load a focused dream when navigated from a dream detail screen
+  const { dreamId: dreamIdParam } = useLocalSearchParams<{ dreamId?: string }>();
+  useEffect(() => {
+    if (!dreamIdParam) { setFocusDream(null); return; }
+    getDatabase()
+      .select()
+      .from(dreams)
+      .where(eq(dreams.id, parseInt(dreamIdParam, 10)))
+      .then(([row]) => { if (row) setFocusDream(row); })
+      .catch(() => {});
+  }, [dreamIdParam]);
+
+  const pinnedContext = useMemo(
+    () => (focusDream ? buildPinnedContext(focusDream) : undefined),
+    [focusDream],
+  );
 
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
@@ -88,12 +136,12 @@ export default function ChatScreen() {
     scrollToBottom();
 
     try {
-      let fullResponse = '';
       await sendChatMessage(
         text,
         messages,
-        (token) => { appendStreamToken(token); fullResponse += token; scrollToBottom(); },
-        () => { finalizeStream(fullResponse); scrollToBottom(); },
+        (token) => { appendStreamToken(token); scrollToBottom(); },
+        (response) => { finalizeStream(response); scrollToBottom(); },
+        pinnedContext,
       );
     } catch {
       finalizeStream('Sorry, something went wrong. Please try again.');
@@ -216,12 +264,12 @@ export default function ChatScreen() {
       setInputText('');
       scrollToBottom();
 
-      let fullResponse = '';
       sendChatMessage(
         text,
         history,
-        (token) => { appendStreamToken(token); fullResponse += token; scrollToBottom(); },
-        () => { finalizeStream(fullResponse); scrollToBottom(); resolve(fullResponse); },
+        (token) => { appendStreamToken(token); scrollToBottom(); },
+        (response) => { finalizeStream(response); scrollToBottom(); resolve(response); },
+        pinnedContext,
       ).catch(reject);
     });
 
@@ -339,6 +387,26 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={90}
     >
+      {/* ── Focused dream banner ── */}
+      {focusDream && (
+        <View style={styles.contextBanner}>
+          <View style={styles.contextBannerBody}>
+            <Text style={styles.contextBannerLabel}>Focused on</Text>
+            <Text style={styles.contextBannerTitle} numberOfLines={1}>
+              {focusDream.title || 'Untitled Dream'}
+            </Text>
+            {focusDream.summary ? (
+              <Text style={styles.contextBannerSummary} numberOfLines={2}>
+                {focusDream.summary}
+              </Text>
+            ) : null}
+          </View>
+          <Pressable onPress={() => setFocusDream(null)} hitSlop={12} style={styles.contextBannerDismiss}>
+            <Text style={styles.contextBannerDismissText}>✕</Text>
+          </Pressable>
+        </View>
+      )}
+
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -503,6 +571,46 @@ const styles = StyleSheet.create({
     borderTopColor: '#1a1a2e',
     gap: 8,
     alignItems: 'center',
+  },
+  // ── Focused dream banner ──
+  contextBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#0f172a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e3a5f',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  contextBannerBody: {
+    flex: 1,
+    gap: 2,
+  },
+  contextBannerLabel: {
+    color: '#3b82f6',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  contextBannerTitle: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  contextBannerSummary: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  contextBannerDismiss: {
+    paddingTop: 2,
+  },
+  contextBannerDismissText: {
+    color: '#475569',
+    fontSize: 14,
   },
   // ── Conversation mode ──
   convStatus: {

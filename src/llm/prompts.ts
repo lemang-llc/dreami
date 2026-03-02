@@ -16,8 +16,19 @@ Relevant dream memories:
 ${context}
 
 ---
-Answer thoughtfully and concisely. Reference specific dreams when relevant.
+Respond directly with your answer. Do not restate or repeat the context above.
+Be thoughtful and concise. Reference specific dreams when relevant.
 Speak directly to the user (use "you" and "your"). Never make up dreams that aren't in the context.`;
+
+export const FOCUSED_DREAM_SYSTEM_PROMPT = (dreamContext: string, ragContext?: string) =>
+`You are a compassionate dream analyst. The user wants to explore a specific dream in depth.
+
+## Dream in Focus
+${dreamContext}
+${ragContext ? `\n## Other Related Dreams\n${ragContext}` : ''}
+---
+Respond directly with your analysis or answer. Do not restate, repeat, or quote the context above.
+Speak to the user (use "you" and "your"). Never invent details not present in the context.`;
 
 export const TRENDS_PROMPT = (context: string) => `Based on these dream excerpts, identify:
 - Recurring themes or symbols
