@@ -9,10 +9,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/icon.png',
   userInterfaceStyle: 'dark',
   splash: {
-    image: './assets/splash-icon.png',
-    resizeMode: 'contain',
-    backgroundColor: '#0a0a1a',
-    // splash-icon.png exists in the template assets
+    backgroundColor: '#0b1630',
   },
   ios: {
     supportsTablet: false,

@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View } from 'react-native';
+import { SplashScreen } from '../src/components/SplashScreen';
 import { useFonts, Cinzel_400Regular, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import {
   Outfit_400Regular,
@@ -29,6 +30,7 @@ configureNotificationHandler();
 export default function RootLayout() {
   const { setOnboardingComplete, onboardingComplete } = useAppStore();
   const [isReady, setIsReady] = useState(false);
+  const [showSplash, setShowSplash] = useState(false);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
   const pendingNavRef = useRef<string | null>(null);
 
@@ -89,17 +91,20 @@ export default function RootLayout() {
     }
   }, [isReady, onboardingComplete]);
 
+  // Show custom splash once the app is fully initialised
+  useEffect(() => {
+    if (isReady && fontsLoaded) setShowSplash(true);
+  }, [isReady, fontsLoaded]);
+
   if (!fontsLoaded || !isReady) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bg }}>
-        <ActivityIndicator color={COLORS.lavender} size="large" />
-      </View>
-    );
+    // Dark background while fonts + DB load — native splash covers this gap
+    return <View style={{ flex: 1, backgroundColor: COLORS.bg }} />;
   }
 
   return (
     <>
       <StatusBar style="light" />
+      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: COLORS.bg },
