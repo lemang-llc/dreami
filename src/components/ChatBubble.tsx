@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { ChatMessage } from '../llm/chat';
+import { COLORS, FONTS } from '../theme';
 
 interface ChatBubbleProps {
   message: ChatMessage;
@@ -20,7 +21,6 @@ export function ChatBubble({ message, isSpeaking = false, onSpeak }: ChatBubbleP
       </View>
 
       <View style={styles.meta}>
-        {/* Speaker button — only on assistant messages */}
         {!isUser && onSpeak && (
           <Pressable onPress={onSpeak} style={styles.speakBtn} hitSlop={8}>
             <Text style={[styles.speakIcon, isSpeaking && styles.speakIconActive]}>
@@ -58,7 +58,7 @@ export function StreamingBubble({ content }: StreamingBubbleProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 6,
+    marginVertical: 5,
     marginHorizontal: 16,
     maxWidth: '85%',
   },
@@ -71,29 +71,33 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   bubble: {
-    borderRadius: 18,
+    borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   userBubble: {
-    backgroundColor: '#6c63ff',
-    borderBottomRightRadius: 4,
+    backgroundColor: COLORS.lavenderDeep,
+    borderBottomRightRadius: 5,
   },
   assistantBubble: {
-    backgroundColor: '#1a1a2e',
-    borderBottomLeftRadius: 4,
+    backgroundColor: COLORS.surface,
+    borderBottomLeftRadius: 5,
     borderWidth: 1,
-    borderColor: '#2d2d4e',
+    borderColor: COLORS.border,
+    // Subtle left accent
+    borderLeftWidth: 2,
+    borderLeftColor: COLORS.lavenderMid,
   },
   text: {
     fontSize: 15,
+    fontFamily: FONTS.body,
     lineHeight: 22,
   },
   userText: {
     color: '#ffffff',
   },
   assistantText: {
-    color: '#e2e8f0',
+    color: COLORS.textBright,
   },
   meta: {
     flexDirection: 'row',
@@ -107,16 +111,17 @@ const styles = StyleSheet.create({
   },
   speakIcon: {
     fontSize: 13,
-    opacity: 0.5,
+    opacity: 0.45,
   },
   speakIconActive: {
     opacity: 1,
   },
   time: {
-    color: '#475569',
+    color: COLORS.textDim,
     fontSize: 11,
+    fontFamily: FONTS.body,
   },
   cursor: {
-    color: '#a78bfa',
+    color: COLORS.lavender,
   },
 });

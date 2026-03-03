@@ -16,6 +16,9 @@ import {
 import { NotificationTimePicker } from '../src/components/NotificationTimePicker';
 import { getModelsDirSize, getRecordingFiles, deleteFile, formatBytes } from '../src/utils/fileSystem';
 import { MODEL_SIZES } from '../src/models/config';
+import { StarField } from '../src/components/StarField';
+import { DreAmI } from '../src/components/DreAmI';
+import { COLORS, FONTS } from '../src/theme';
 
 export default function SettingsScreen() {
   const [notifEnabled, setNotifEnabled] = useState(true);
@@ -38,7 +41,6 @@ export default function SettingsScreen() {
       ]);
       setModelsDirSize(mSize);
 
-      // Calculate total recordings size
       let rSize = 0;
       for (const f of recordings) {
         const { getFileSize } = await import('../src/utils/fileSystem');
@@ -83,97 +85,112 @@ export default function SettingsScreen() {
   if (isLoading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color="#a78bfa" />
+        <StarField />
+        <ActivityIndicator color={COLORS.lavender} />
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Notifications */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Morning Reminder</Text>
+    <View style={styles.root}>
+      <StarField />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-        <View style={styles.row}>
-          <View style={styles.rowInfo}>
-            <Text style={styles.rowLabel}>Daily Reminder</Text>
-            <Text style={styles.rowSub}>
-              Get reminded to record your dreams
-            </Text>
-          </View>
-          <Switch
-            value={notifEnabled}
-            onValueChange={handleNotifToggle}
-            trackColor={{ false: '#2d2d4e', true: '#6c63ff' }}
-            thumbColor={notifEnabled ? '#ffffff' : '#64748b'}
-          />
-        </View>
+        {/* Notifications */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Morning Reminder</Text>
 
-        {notifEnabled && (
           <View style={styles.row}>
             <View style={styles.rowInfo}>
-              <Text style={styles.rowLabel}>Time</Text>
-              <Text style={styles.rowSub}>When to send the reminder</Text>
+              <Text style={styles.rowLabel}>Daily Reminder</Text>
+              <Text style={styles.rowSub}>
+                Get reminded to record your dreams
+              </Text>
             </View>
-            <NotificationTimePicker
-              hour={notifHour}
-              minute={notifMinute}
-              onConfirm={handleTimeChange}
+            <Switch
+              value={notifEnabled}
+              onValueChange={handleNotifToggle}
+              trackColor={{ false: COLORS.border, true: COLORS.lavenderDeep }}
+              thumbColor={notifEnabled ? '#ffffff' : COLORS.textDim}
             />
           </View>
-        )}
-      </View>
 
-      {/* Storage */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Storage</Text>
-
-        <View style={styles.storageRow}>
-          <Text style={styles.storageLabel}>AI Models</Text>
-          <Text style={styles.storageValue}>{formatBytes(modelsDirSize)}</Text>
+          {notifEnabled && (
+            <View style={styles.row}>
+              <View style={styles.rowInfo}>
+                <Text style={styles.rowLabel}>Time</Text>
+                <Text style={styles.rowSub}>When to send the reminder</Text>
+              </View>
+              <NotificationTimePicker
+                hour={notifHour}
+                minute={notifMinute}
+                onConfirm={handleTimeChange}
+              />
+            </View>
+          )}
         </View>
 
-        <View style={styles.storageRow}>
-          <Text style={styles.storageLabel}>Audio Recordings</Text>
-          <Text style={styles.storageValue}>{formatBytes(recordingsSize)}</Text>
+        {/* Storage */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Storage</Text>
+
+          <View style={styles.storageRow}>
+            <Text style={styles.storageLabel}>AI Models</Text>
+            <Text style={styles.storageValue}>{formatBytes(modelsDirSize)}</Text>
+          </View>
+
+          <View style={styles.storageRow}>
+            <Text style={styles.storageLabel}>Audio Recordings</Text>
+            <Text style={styles.storageValue}>{formatBytes(recordingsSize)}</Text>
+          </View>
+
+          <View style={styles.modelList}>
+            <Text style={styles.modelItem}>
+              · LLM: {formatBytes(MODEL_SIZES.llm)} (Llama 3.2 1B)
+            </Text>
+            <Text style={styles.modelItem}>
+              · Whisper: {formatBytes(MODEL_SIZES.whisper)}
+            </Text>
+            <Text style={styles.modelItem}>
+              · Embeddings: {formatBytes(MODEL_SIZES.embedding)}
+            </Text>
+          </View>
+
+          {recordingsSize > 0 && (
+            <Pressable style={styles.deleteBtn} onPress={handleDeleteRecordings}>
+              <Text style={styles.deleteBtnText}>Delete Audio Files</Text>
+            </Pressable>
+          )}
         </View>
 
-        <View style={styles.modelList}>
-          <Text style={styles.modelItem}>
-            • LLM: {formatBytes(MODEL_SIZES.llm)} (Llama 3.2 1B)
-          </Text>
-          <Text style={styles.modelItem}>
-            • Whisper: {formatBytes(MODEL_SIZES.whisper)}
-          </Text>
-          <Text style={styles.modelItem}>
-            • Embeddings: {formatBytes(MODEL_SIZES.embedding)}
-          </Text>
+        {/* About */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>About</Text>
+          <View style={styles.aboutCard}>
+            <View style={styles.aboutNameRow}>
+              <DreAmI size={15} />
+              <Text style={styles.aboutVersion}> v1.0</Text>
+            </View>
+            <Text style={styles.aboutText}>
+              All AI inference runs locally on your device.{'\n'}
+              No data ever leaves your phone.
+            </Text>
+          </View>
         </View>
 
-        {recordingsSize > 0 && (
-          <Pressable style={styles.deleteBtn} onPress={handleDeleteRecordings}>
-            <Text style={styles.deleteBtnText}>Delete Audio Files</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {/* About */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <Text style={styles.aboutText}>
-          Dream Diary v1.0{'\n'}
-          All AI inference runs locally on your device.{'\n'}
-          No data ever leaves your phone.
-        </Text>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#0a0a1a',
+    backgroundColor: COLORS.bg,
+  },
+  scroll: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   content: {
     padding: 20,
@@ -183,40 +200,44 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a1a',
+    backgroundColor: COLORS.bg,
   },
   section: {
     marginBottom: 32,
   },
   sectionTitle: {
-    color: '#475569',
+    color: COLORS.lavenderMid,
+    fontFamily: FONTS.cinzelReg,
     fontSize: 11,
-    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
     marginBottom: 12,
+    opacity: 0.85,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
     padding: 14,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   rowInfo: {
     flex: 1,
     marginRight: 12,
   },
   rowLabel: {
-    color: '#e2e8f0',
+    color: COLORS.textBright,
+    fontFamily: FONTS.bodyMed,
     fontSize: 15,
-    fontWeight: '500',
     marginBottom: 2,
   },
   rowSub: {
-    color: '#475569',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 12,
   },
   storageRow: {
@@ -224,44 +245,64 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
+    borderBottomColor: COLORS.border,
   },
   storageLabel: {
-    color: '#94a3b8',
+    color: COLORS.textMid,
+    fontFamily: FONTS.body,
     fontSize: 14,
   },
   storageValue: {
-    color: '#e2e8f0',
+    color: COLORS.textBright,
+    fontFamily: FONTS.bodyMed,
     fontSize: 14,
-    fontWeight: '500',
   },
   modelList: {
     marginTop: 12,
     gap: 4,
+    paddingHorizontal: 2,
   },
   modelItem: {
-    color: '#475569',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 12,
+    lineHeight: 18,
   },
   deleteBtn: {
     marginTop: 16,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#3d1a1a',
+    borderColor: COLORS.rose + '55',
   },
   deleteBtnText: {
-    color: '#f87171',
+    color: COLORS.rose,
+    fontFamily: FONTS.bodyMed,
+    fontSize: 14,
+  },
+  aboutCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 8,
+  },
+  aboutNameRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  aboutVersion: {
+    color: COLORS.textMid,
+    fontFamily: FONTS.bodyMed,
     fontSize: 14,
   },
   aboutText: {
-    color: '#475569',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 13,
     lineHeight: 20,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    padding: 14,
   },
 });

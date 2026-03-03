@@ -1,16 +1,13 @@
 import React from 'react';
 import { Tabs, router } from 'expo-router';
 import { Text, Pressable } from 'react-native';
+import { DreAmI } from '../../src/components/DreAmI';
+import { COLORS, FONTS } from '../../src/theme';
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Home: '🌙',
-    Record: '🎙',
-    Chat: '✨',
-  };
+function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
-    <Text style={{ fontSize: focused ? 24 : 20, opacity: focused ? 1 : 0.5 }}>
-      {icons[label] ?? '?'}
+    <Text style={{ fontSize: focused ? 22 : 18, opacity: focused ? 1 : 0.4 }}>
+      {emoji}
     </Text>
   );
 }
@@ -20,27 +17,35 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: '#0f0f1e',
-          borderTopColor: '#1a1a2e',
-          borderTopWidth: 1,
-          height: 80,
-          paddingBottom: 16,
+          backgroundColor: '#0c0c20',
+          borderTopWidth: 0,
+          height: 84,
+          paddingBottom: 18,
+          paddingTop: 8,
+          // Soft upward glow from tab bar
+          shadowColor: COLORS.lavender,
+          shadowOffset: { width: 0, height: -6 },
+          shadowOpacity: 0.1,
+          shadowRadius: 14,
+          elevation: 24,
         },
-        tabBarActiveTintColor: '#a78bfa',
-        tabBarInactiveTintColor: '#475569',
+        tabBarActiveTintColor: COLORS.lavender,
+        tabBarInactiveTintColor: COLORS.textDim,
         tabBarLabelStyle: {
+          fontFamily: FONTS.bodyMed,
           fontSize: 11,
-          fontWeight: '600',
+          marginTop: 2,
         },
-        headerStyle: { backgroundColor: '#0a0a1a' },
-        headerTintColor: '#e2e8f0',
-        headerTitleStyle: { fontWeight: '700' },
+        headerStyle: { backgroundColor: COLORS.bg },
+        headerTintColor: COLORS.lavender,
+        headerTitleStyle: { fontFamily: FONTS.bodySemi },
+        headerTitle: () => <DreAmI size={22} />,
         headerRight: () => (
           <Pressable
             onPress={() => router.push('/settings')}
-            style={{ marginRight: 16 }}
+            style={{ marginRight: 18 }}
           >
-            <Text style={{ fontSize: 20 }}>⚙️</Text>
+            <Text style={{ fontSize: 18 }}>⚙️</Text>
           </Pressable>
         ),
       }}
@@ -48,31 +53,22 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dreams',
           tabBarLabel: 'Dreams',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon label="Home" focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon emoji="🌙" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="record"
         options={{
-          title: 'Record',
           tabBarLabel: 'Record',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon label="Record" focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon emoji="🎙" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="chat"
         options={{
-          title: 'Explore',
           tabBarLabel: 'Explore',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon label="Chat" focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) => <TabIcon emoji="✨" focused={focused} />,
         }}
       />
     </Tabs>

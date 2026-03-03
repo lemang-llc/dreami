@@ -12,32 +12,24 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { useDreams } from '../../src/hooks/useDreams';
 import { DreamCard } from '../../src/components/DreamCard';
+import { StarField } from '../../src/components/StarField';
 import { Dream } from '../../src/db/schema';
+import { COLORS, MOOD_COLORS, FONTS } from '../../src/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Period = 'all' | 'month' | 'week';
 
 type TimelineSection = {
-  date: string;    // YYYY-MM-DD local
-  title: string;   // "Today", "Yesterday", "Monday, Mar 3", …
+  date: string;
+  title: string;
   data: Dream[];
-  gapDays: number; // calendar days between this section and the one above it (newer)
+  gapDays: number;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MOODS = ['vivid', 'anxious', 'peaceful', 'strange', 'dark', 'joyful', 'neutral'] as const;
-
-const MOOD_COLORS: Record<string, string> = {
-  vivid: '#a78bfa',
-  anxious: '#f97316',
-  peaceful: '#34d399',
-  strange: '#60a5fa',
-  dark: '#6b7280',
-  joyful: '#fbbf24',
-  neutral: '#9ca3af',
-};
 
 const PERIOD_LABELS: Record<Period, string> = {
   all: 'All time',
@@ -78,12 +70,9 @@ function daysBetween(olderKey: string, newerKey: string): number {
   const [oy, om, od] = olderKey.split('-').map(Number);
   const [ny, nm, nd] = newerKey.split('-').map(Number);
   return Math.round(
-    (new Date(ny, nm - 1, nd).getTime() - new Date(oy, om - 1, od).getTime()) /
-      86_400_000,
+    (new Date(ny, nm - 1, nd).getTime() - new Date(oy, om - 1, od).getTime()) / 86_400_000,
   );
 }
-
-// ─── Section builder ──────────────────────────────────────────────────────────
 
 function buildSections(dreams: Dream[]): TimelineSection[] {
   const grouped = new Map<string, Dream[]>();
@@ -92,15 +81,11 @@ function buildSections(dreams: Dream[]): TimelineSection[] {
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key)!.push(d);
   }
-
-  // Newest date first
   const keys = Array.from(grouped.keys()).sort((a, b) => b.localeCompare(a));
-
   return keys.map((key, i) => ({
     date: key,
     title: formatSectionTitle(key),
     data: grouped.get(key)!,
-    // Gap between this section and the one above it in the list (the newer one, i-1)
     gapDays: i === 0 ? 0 : daysBetween(key, keys[i - 1]),
   }));
 }
@@ -112,17 +97,11 @@ export default function DreamListScreen() {
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('all');
 
-  useFocusEffect(
-    useCallback(() => { refetch(); }, [refetch]),
-  );
+  useFocusEffect(useCallback(() => { refetch(); }, [refetch]));
 
   const filtered = useMemo(() => {
     let d = dreams;
-
-    if (selectedMood) {
-      d = d.filter((x) => x.mood === selectedMood);
-    }
-
+    if (selectedMood) d = d.filter((x) => x.mood === selectedMood);
     if (selectedPeriod === 'week') {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 7);
@@ -132,15 +111,11 @@ export default function DreamListScreen() {
       cutoff.setMonth(cutoff.getMonth() - 1);
       d = d.filter((x) => x.createdAt >= cutoff.toISOString());
     }
-
     return d;
   }, [dreams, selectedMood, selectedPeriod]);
 
   const sections = useMemo(() => buildSections(filtered), [filtered]);
-
   const isFiltered = selectedMood !== null || selectedPeriod !== 'all';
-
-  // ── Section header ────────────────────────────────────────────────────────
 
   const renderSectionHeader = ({ section }: { section: TimelineSection }) => (
     <View>
@@ -148,7 +123,7 @@ export default function DreamListScreen() {
         <View style={styles.gapRow}>
           <View style={styles.gapLine} />
           <Text style={styles.gapLabel}>
-            — {section.gapDays} day{section.gapDays !== 1 ? 's' : ''} —
+            {section.gapDays} day{section.gapDays !== 1 ? 's' : ''} apart
           </Text>
           <View style={styles.gapLine} />
         </View>
@@ -161,8 +136,6 @@ export default function DreamListScreen() {
       </View>
     </View>
   );
-
-  // ── Empty state ───────────────────────────────────────────────────────────
 
   const renderEmpty = () => {
     if (isLoading) return null;
@@ -186,14 +159,14 @@ export default function DreamListScreen() {
     );
   };
 
-  // ── Filter bar ────────────────────────────────────────────────────────────
-
   const toggleMood = (mood: string) =>
     setSelectedMood((prev) => (prev === mood ? null : mood));
 
   return (
     <View style={styles.container}>
-      {/* ── Filter bar (fixed, doesn't scroll away) ── */}
+      <StarField />
+
+      {/* Filter bar */}
       <View style={styles.filterBar}>
         <ScrollView
           horizontal
@@ -217,12 +190,14 @@ export default function DreamListScreen() {
                 key={mood}
                 style={[
                   styles.chip,
-                  active && { borderColor: color, backgroundColor: color + '28' },
+                  active && { borderColor: color, backgroundColor: color + '22' },
                 ]}
                 onPress={() => toggleMood(mood)}
               >
                 <View style={[styles.moodDot, { backgroundColor: color }]} />
-                <Text style={[styles.chipText, active && { color }]}>{mood}</Text>
+                <Text style={[styles.chipText, active && { color, fontFamily: FONTS.bodyMed }]}>
+                  {mood}
+                </Text>
               </Pressable>
             );
           })}
@@ -235,12 +210,7 @@ export default function DreamListScreen() {
               style={[styles.periodBtn, selectedPeriod === p && styles.periodBtnActive]}
               onPress={() => setSelectedPeriod(p)}
             >
-              <Text
-                style={[
-                  styles.periodText,
-                  selectedPeriod === p && styles.periodTextActive,
-                ]}
-              >
+              <Text style={[styles.periodText, selectedPeriod === p && styles.periodTextActive]}>
                 {PERIOD_LABELS[p]}
               </Text>
             </Pressable>
@@ -248,7 +218,7 @@ export default function DreamListScreen() {
         </View>
       </View>
 
-      {/* ── Timeline list ── */}
+      {/* Timeline list */}
       <SectionList<Dream, TimelineSection>
         sections={sections}
         keyExtractor={(item) => String(item.id)}
@@ -258,8 +228,9 @@ export default function DreamListScreen() {
         renderSectionHeader={renderSectionHeader}
         ListEmptyComponent={renderEmpty}
         stickySectionHeadersEnabled={false}
+        style={{ backgroundColor: 'transparent' }}
         refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor="#a78bfa" />
+          <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={COLORS.lavender} />
         }
         contentContainerStyle={
           sections.length === 0 ? styles.emptyContainer : styles.listContent
@@ -268,7 +239,7 @@ export default function DreamListScreen() {
 
       {isLoading && dreams.length === 0 && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator color="#a78bfa" />
+          <ActivityIndicator color={COLORS.lavender} />
         </View>
       )}
     </View>
@@ -280,18 +251,19 @@ export default function DreamListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a1a',
+    backgroundColor: COLORS.bg,
   },
 
-  // ── Filter bar ──
+  // Filter bar
   filterBar: {
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a2e',
+    borderBottomColor: COLORS.border,
     paddingTop: 10,
     paddingBottom: 8,
+    backgroundColor: 'transparent',
   },
   moodRow: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     gap: 6,
     paddingBottom: 8,
   },
@@ -303,29 +275,29 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#2d2d4e',
-    backgroundColor: '#1a1a2e',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
   },
   chipAllActive: {
-    borderColor: '#6c63ff',
-    backgroundColor: '#6c63ff28',
+    borderColor: COLORS.lavenderMid,
+    backgroundColor: COLORS.lavenderMid + '22',
   },
   chipText: {
-    color: '#64748b',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 12,
-    fontWeight: '500',
   },
   chipTextActive: {
-    color: '#e2e8f0',
+    color: COLORS.textBright,
   },
   moodDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   periodRow: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     gap: 4,
   },
   periodBtn: {
@@ -335,18 +307,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   periodBtnActive: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: COLORS.surface,
   },
   periodText: {
-    color: '#475569',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 12,
   },
   periodTextActive: {
-    color: '#a78bfa',
-    fontWeight: '600',
+    color: COLORS.lavender,
+    fontFamily: FONTS.bodyMed,
   },
 
-  // ── Timeline ──
+  // Timeline
   listContent: {
     paddingTop: 4,
     paddingBottom: 32,
@@ -358,40 +331,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
-    paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingHorizontal: 18,
+    paddingTop: 22,
     paddingBottom: 6,
   },
   sectionTitle: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+    color: COLORS.lavender,
+    fontFamily: FONTS.cinzel,
+    fontSize: 11,
+    letterSpacing: 1,
     textTransform: 'uppercase',
+    opacity: 0.85,
   },
   sectionCount: {
-    color: '#334155',
+    color: COLORS.textFaint,
+    fontFamily: FONTS.body,
     fontSize: 11,
   },
   gapRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 20,
-    marginTop: 12,
+    marginHorizontal: 22,
+    marginTop: 14,
     marginBottom: 2,
   },
   gapLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: COLORS.border,
   },
   gapLabel: {
-    color: '#334155',
+    color: COLORS.textFaint,
+    fontFamily: FONTS.body,
     fontSize: 11,
     marginHorizontal: 10,
   },
 
-  // ── Empty ──
+  // Empty state
   empty: {
     flex: 1,
     alignItems: 'center',
@@ -399,31 +375,39 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 16,
+    fontSize: 52,
+    marginBottom: 18,
   },
   emptyTitle: {
-    color: '#e2e8f0',
+    color: COLORS.textBright,
+    fontFamily: FONTS.cinzel,
     fontSize: 20,
-    fontWeight: '600',
     marginBottom: 8,
+    letterSpacing: 0.5,
   },
   emptySubtitle: {
-    color: '#475569',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 14,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
+    lineHeight: 20,
   },
   recordBtn: {
-    backgroundColor: '#6c63ff',
-    borderRadius: 14,
-    paddingHorizontal: 24,
+    backgroundColor: COLORS.lavenderDeep,
+    borderRadius: 16,
+    paddingHorizontal: 28,
     paddingVertical: 14,
+    shadowColor: COLORS.lavender,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
   recordBtnText: {
     color: '#ffffff',
+    fontFamily: FONTS.bodySemi,
     fontSize: 15,
-    fontWeight: '600',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -53,7 +53,7 @@ export function getDatabase() {
 export async function initDatabase(): Promise<ReturnType<typeof drizzle>> {
   if (_db) return _db;
 
-  _sqlite = await SQLite.openDatabaseAsync('dream-diary.db');
+  _sqlite = await SQLite.openDatabaseAsync('dreami.db');
 
   await _sqlite.execAsync('PRAGMA journal_mode = WAL;');
   await _sqlite.execAsync('PRAGMA foreign_keys = ON;');

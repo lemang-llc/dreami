@@ -1,21 +1,7 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Dream } from '../db/schema';
-
-const MOOD_COLORS: Record<string, string> = {
-  vivid: '#a78bfa',
-  anxious: '#f97316',
-  peaceful: '#34d399',
-  strange: '#60a5fa',
-  dark: '#6b7280',
-  joyful: '#fbbf24',
-  neutral: '#9ca3af',
-};
+import { COLORS, MOOD_COLORS, FONTS } from '../theme';
 
 interface DreamCardProps {
   dream: Dream;
@@ -24,62 +10,56 @@ interface DreamCardProps {
 
 export function DreamCard({ dream, onPress }: DreamCardProps) {
   const tags: string[] = (() => {
-    try {
-      return JSON.parse(dream.tags ?? '[]');
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(dream.tags ?? '[]'); } catch { return []; }
   })();
 
   const moodColor = MOOD_COLORS[dream.mood ?? 'neutral'] ?? MOOD_COLORS.neutral;
 
   const _date = new Date(dream.createdAt);
-  const dateStr = _date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-  const timeStr = _date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  const dateStr = _date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeStr = _date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       onPress={onPress}
     >
-      <View style={styles.header}>
-        <Text style={styles.title} numberOfLines={1}>
-          {dream.title || 'Untitled Dream'}
-        </Text>
-        <View style={[styles.moodDot, { backgroundColor: moodColor }]} />
-      </View>
+      {/* Mood accent line on the left edge */}
+      <View style={[styles.accentLine, { backgroundColor: moodColor }]} />
 
-      {dream.summary ? (
-        <Text style={styles.summary} numberOfLines={2}>
-          {dream.summary}
-        </Text>
-      ) : (
-        <Text style={styles.transcript} numberOfLines={2}>
-          {dream.transcript || 'No transcript yet...'}
-        </Text>
-      )}
+      <View style={styles.body}>
+        <View style={styles.header}>
+          <Text style={styles.title} numberOfLines={1}>
+            {dream.title || 'Untitled Dream'}
+          </Text>
+          {dream.mood && (
+            <Text style={[styles.moodLabel, { color: moodColor }]}>{dream.mood}</Text>
+          )}
+        </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.date}>{timeStr} · {dateStr}</Text>
-        <View style={styles.tags}>
-          {tags.slice(0, 3).map((tag) => (
-            <View key={tag} style={styles.tag}>
-              <Text style={styles.tagText}>{tag}</Text>
-            </View>
-          ))}
+        {dream.summary ? (
+          <Text style={styles.summary} numberOfLines={2}>{dream.summary}</Text>
+        ) : (
+          <Text style={styles.transcript} numberOfLines={2}>
+            {dream.transcript || 'No transcript yet…'}
+          </Text>
+        )}
+
+        <View style={styles.footer}>
+          <Text style={styles.date}>{timeStr} · {dateStr}</Text>
+          <View style={styles.tags}>
+            {tags.slice(0, 3).map((tag) => (
+              <View key={tag} style={styles.tag}>
+                <Text style={styles.tagText}>{tag}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </View>
 
       {!dream.isProcessed && (
         <View style={styles.processingBadge}>
-          <Text style={styles.processingText}>Processing...</Text>
+          <Text style={styles.processingText}>processing</Text>
         </View>
       )}
     </Pressable>
@@ -88,47 +68,61 @@ export function DreamCard({ dream, onPress }: DreamCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 16,
-    padding: 16,
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
     marginHorizontal: 16,
     marginVertical: 6,
     borderWidth: 1,
-    borderColor: '#2d2d4e',
+    borderColor: COLORS.border,
+    overflow: 'hidden',
   },
   cardPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
+    opacity: 0.82,
+    transform: [{ scale: 0.985 }],
+  },
+  accentLine: {
+    width: 3,
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 20,
+  },
+  body: {
+    flex: 1,
+    padding: 14,
+    paddingLeft: 13,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   title: {
-    color: '#e2e8f0',
-    fontSize: 16,
-    fontWeight: '600',
+    color: COLORS.textBright,
+    fontSize: 15,
+    fontFamily: FONTS.bodySemi,
     flex: 1,
     marginRight: 8,
   },
-  moodDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  moodLabel: {
+    fontSize: 11,
+    fontFamily: FONTS.bodyMed,
+    textTransform: 'capitalize',
+    letterSpacing: 0.3,
   },
   summary: {
-    color: '#94a3b8',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
+    color: COLORS.textMid,
+    fontSize: 13,
+    fontFamily: FONTS.body,
+    lineHeight: 19,
+    marginBottom: 10,
   },
   transcript: {
-    color: '#64748b',
+    color: COLORS.textDim,
     fontSize: 13,
+    fontFamily: FONTS.body,
     lineHeight: 18,
-    marginBottom: 12,
+    marginBottom: 10,
     fontStyle: 'italic',
   },
   footer: {
@@ -137,34 +131,41 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   date: {
-    color: '#475569',
-    fontSize: 12,
+    color: COLORS.textDim,
+    fontSize: 11,
+    fontFamily: FONTS.body,
   },
   tags: {
     flexDirection: 'row',
     gap: 4,
   },
   tag: {
-    backgroundColor: '#2d2d4e',
+    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   tagText: {
-    color: '#a78bfa',
-    fontSize: 11,
+    color: COLORS.lavenderMid,
+    fontSize: 10,
+    fontFamily: FONTS.bodyMed,
   },
   processingBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#1e3a5f',
+    top: 10,
+    right: 10,
+    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   processingText: {
-    color: '#60a5fa',
+    color: COLORS.teal,
     fontSize: 10,
+    fontFamily: FONTS.bodyMed,
   },
 });

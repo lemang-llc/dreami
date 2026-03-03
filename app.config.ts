@@ -2,8 +2,8 @@ import { ExpoConfig, ConfigContext } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'Dream Diary',
-  slug: 'dream-diary',
+  name: 'dreAmI',
+  slug: 'dreami',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -16,7 +16,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   ios: {
     supportsTablet: false,
-    bundleIdentifier: 'com.dreamdiary.app',
+    bundleIdentifier: 'llc.lemang.dreami',
     entitlements: {
       'com.apple.developer.kernel.increased-memory-limit': true,
     },
@@ -30,7 +30,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       monochromeImage: './assets/android-icon-monochrome.png',
       backgroundColor: '#0a0a1a',
     },
-    package: 'com.dreamdiary.app',
+    package: 'llc.lemang.dreami',
     // @ts-ignore: minSdkVersion is a valid field not yet typed in ExpoConfig
     minSdkVersion: 26,
   },
@@ -66,5 +66,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   experiments: {
     typedRoutes: true,
   },
-  scheme: 'dream-diary',
+  scheme: 'dreami',
 });

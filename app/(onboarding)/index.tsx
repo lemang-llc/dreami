@@ -12,11 +12,14 @@ import { router } from 'expo-router';
 import { Platform } from 'react-native';
 import { useModelStatus } from '../../src/hooks/useModelStatus';
 import { ModelDownloadCard } from '../../src/components/ModelDownloadCard';
+import { StarField } from '../../src/components/StarField';
+import { DreAmI } from '../../src/components/DreAmI';
 import { MODEL_SIZES, SETTINGS_KEYS } from '../../src/models/config';
 import { getDatabase } from '../../src/db/client';
 import { appSettings } from '../../src/db/schema';
 import { useAppStore } from '../../src/stores/appStore';
 import { ensureDirectoriesExist } from '../../src/utils/fileSystem';
+import { COLORS, FONTS } from '../../src/theme';
 
 export default function OnboardingScreen() {
   const { llm, embed, whisper, checkDownloaded, downloadAll, allDownloaded, resumeInterruptedDownloads } =
@@ -28,16 +31,12 @@ export default function OnboardingScreen() {
   useEffect(() => {
     async function check() {
       await ensureDirectoriesExist();
-      // Resume any downloads that were interrupted by an app kill.
       await resumeInterruptedDownloads();
-      // Refresh the downloaded/pending status for models that aren't resuming.
       await checkDownloaded();
       setChecking(false);
     }
     check();
 
-    // When the app returns to the foreground (e.g. after screen lock), re-check
-    // whether any background downloads finished while the screen was off.
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') checkDownloaded();
     });
@@ -48,12 +47,8 @@ export default function OnboardingScreen() {
     setDownloading(true);
     try {
       await downloadAll();
-    } catch (e) {
-      Alert.alert(
-        'Download Error',
-        'Some models failed to download. Please check your connection and try again.',
-        [{ text: 'OK' }]
-      );
+    } catch {
+      Alert.alert('Download Error', 'Some models failed to download. Please check your connection and try again.', [{ text: 'OK' }]);
     } finally {
       setDownloading(false);
     }
@@ -64,119 +59,121 @@ export default function OnboardingScreen() {
     await db
       .insert(appSettings)
       .values({ key: SETTINGS_KEYS.ONBOARDING_COMPLETE, value: 'true' })
-      .onConflictDoUpdate({
-        target: appSettings.key,
-        set: { value: 'true' },
-      });
-
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: 'true' } });
     setOnboardingComplete(true);
     router.replace('/(tabs)');
   };
 
-  const totalSize =
-    MODEL_SIZES.llm + MODEL_SIZES.embedding + MODEL_SIZES.whisper;
+  const totalSize = MODEL_SIZES.llm + MODEL_SIZES.embedding + MODEL_SIZES.whisper;
   const totalGB = (totalSize / 1e9).toFixed(1);
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-    >
-      <View style={styles.hero}>
-        <Text style={styles.emoji}>🌙</Text>
-        <Text style={styles.title}>Dream Diary</Text>
-        <Text style={styles.subtitle}>
-          Your fully private dream journal.{'\n'}
-          All AI runs locally on your device.
+    <View style={styles.root}>
+      <StarField />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
+        {/* Hero */}
+        <View style={styles.hero}>
+          <Text style={styles.moonEmoji}>🌙</Text>
+          <DreAmI size={42} style={styles.wordmark} />
+          <Text style={styles.tagline}>
+            Your fully private dream journal.{'\n'}
+            Ancient craft meets on-device AI.
+          </Text>
+        </View>
+
+        {/* Models section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Download AI Models</Text>
+          <Text style={styles.sectionSub}>
+            ~{totalGB} GB · Only needed once · Wi-Fi recommended
+          </Text>
+
+          <ModelDownloadCard
+            name="Llama 3.2 1B"
+            description="Dream analysis & chat"
+            sizeBytes={MODEL_SIZES.llm}
+            status={llm}
+          />
+          <ModelDownloadCard
+            name="Whisper Small"
+            description="Voice transcription"
+            sizeBytes={MODEL_SIZES.whisper}
+            status={whisper}
+          />
+          <ModelDownloadCard
+            name="Nomic Embed"
+            description="Semantic memory search"
+            sizeBytes={MODEL_SIZES.embedding}
+            status={embed}
+          />
+        </View>
+
+        {/* Actions */}
+        <View style={styles.actions}>
+          {!allDownloaded && !downloading && (
+            <Pressable
+              style={[styles.btn, checking && styles.btnDisabled]}
+              onPress={handleDownload}
+              disabled={downloading || checking}
+            >
+              <Text style={styles.btnText}>
+                {checking ? 'Checking…' : 'Download Models'}
+              </Text>
+            </Pressable>
+          )}
+
+          {downloading && (
+            <View style={styles.downloadingCard}>
+              <Text style={styles.downloadingText}>
+                Downloading… please keep the app open.
+              </Text>
+            </View>
+          )}
+
+          {allDownloaded && (
+            <Pressable style={styles.btn} onPress={handleContinue}>
+              <Text style={styles.btnText}>Begin dreaming  →</Text>
+            </Pressable>
+          )}
+        </View>
+
+        <Text style={styles.privacyNote}>
+          Models live on your device and never leave it.{'\n'}
+          No account · No cloud · No tracking.
         </Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Download AI Models</Text>
-        <Text style={styles.sectionSubtitle}>
-          ~{totalGB} GB • Only needed once • Requires Wi-Fi
-        </Text>
-
-        <ModelDownloadCard
-          name="Llama 3.2 1B"
-          description="Dream analysis & chat"
-          sizeBytes={MODEL_SIZES.llm}
-          status={llm}
-        />
-        <ModelDownloadCard
-          name="Whisper Small"
-          description="Voice transcription"
-          sizeBytes={MODEL_SIZES.whisper}
-          status={whisper}
-        />
-        <ModelDownloadCard
-          name="Nomic Embed"
-          description="Semantic memory search"
-          sizeBytes={MODEL_SIZES.embedding}
-          status={embed}
-        />
-      </View>
-
-      <View style={styles.actions}>
-        {!allDownloaded && !downloading && (
-          <Pressable
-            style={[styles.btn, styles.primaryBtn]}
-            onPress={handleDownload}
-            disabled={downloading || checking}
-          >
-            <Text style={styles.primaryBtnText}>
-              {checking ? 'Checking...' : 'Download Models'}
-            </Text>
-          </Pressable>
-        )}
-
-        {downloading && (
-          <View style={styles.downloadingIndicator}>
-            <Text style={styles.downloadingText}>Downloading... please keep the app open.</Text>
-          </View>
-        )}
-
-        {allDownloaded && (
-          <Pressable style={[styles.btn, styles.primaryBtn]} onPress={handleContinue}>
-            <Text style={styles.primaryBtnText}>Get Started →</Text>
-          </Pressable>
-        )}
-      </View>
-
-      <Text style={styles.privacyNote}>
-        Models are stored on your device and never leave it.{'\n'}
-        No account, no cloud, no tracking.
-      </Text>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#0a0a1a',
+    backgroundColor: COLORS.bg,
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
     padding: 24,
-    paddingTop: 64,
+    paddingTop: Platform.OS === 'ios' ? 72 : 48,
     paddingBottom: 48,
   },
   hero: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 44,
   },
-  emoji: {
-    fontSize: 64,
+  moonEmoji: {
+    fontSize: 56,
     marginBottom: 16,
   },
-  title: {
-    color: '#e2e8f0',
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 8,
+  wordmark: {
+    marginBottom: 14,
   },
-  subtitle: {
-    color: '#64748b',
+  tagline: {
+    color: COLORS.textMid,
+    fontFamily: FONTS.body,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
@@ -185,13 +182,15 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   sectionTitle: {
-    color: '#e2e8f0',
-    fontSize: 18,
-    fontWeight: '600',
+    color: COLORS.textBright,
+    fontFamily: FONTS.cinzel,
+    fontSize: 16,
     marginBottom: 4,
+    letterSpacing: 0.5,
   },
-  sectionSubtitle: {
-    color: '#475569',
+  sectionSub: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 13,
     marginBottom: 16,
   },
@@ -199,30 +198,40 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   btn: {
-    borderRadius: 14,
+    backgroundColor: COLORS.lavenderDeep,
+    borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
+    shadowColor: COLORS.lavender,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  primaryBtn: {
-    backgroundColor: '#6c63ff',
+  btnDisabled: {
+    opacity: 0.5,
   },
-  primaryBtnText: {
+  btnText: {
     color: '#ffffff',
+    fontFamily: FONTS.bodySemi,
     fontSize: 16,
-    fontWeight: '700',
   },
-  downloadingIndicator: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 14,
+  downloadingCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   downloadingText: {
-    color: '#60a5fa',
+    color: COLORS.teal,
+    fontFamily: FONTS.bodyMed,
     fontSize: 14,
   },
   privacyNote: {
-    color: '#334155',
+    color: COLORS.textFaint,
+    fontFamily: FONTS.body,
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,

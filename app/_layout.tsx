@@ -1,8 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Stack, router, Redirect } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
+import { useFonts, Cinzel_400Regular, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
+import {
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+} from '@expo-google-fonts/outfit';
 import { initDatabase } from '../src/db/client';
 import { appSettings } from '../src/db/schema';
 import { SETTINGS_KEYS } from '../src/models/config';
@@ -15,6 +22,7 @@ import {
 import { useAppStore } from '../src/stores/appStore';
 import { getDatabase } from '../src/db/client';
 import { eq } from 'drizzle-orm';
+import { COLORS, FONTS } from '../src/theme';
 
 configureNotificationHandler();
 
@@ -22,9 +30,16 @@ export default function RootLayout() {
   const { setOnboardingComplete, onboardingComplete } = useAppStore();
   const [isReady, setIsReady] = useState(false);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
-  // Screen to navigate to once the app finishes initialising (cold-start
-  // notification launches deliver the response before the listener registers).
   const pendingNavRef = useRef<string | null>(null);
+
+  const [fontsLoaded] = useFonts({
+    Cinzel_400Regular,
+    Cinzel_700Bold,
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+  });
 
   useEffect(() => {
     async function init() {
@@ -40,14 +55,11 @@ export default function RootLayout() {
       const complete = rows[0]?.value === 'true';
       setOnboardingComplete(complete);
 
-      // Re-schedule notification on every app open if enabled
       if (complete) {
         const notifSettings = await loadNotificationSettings();
         await scheduleNotification(notifSettings);
       }
 
-      // Cold-start: the notification response that launched the app is
-      // available here but won't fire on the listener registered below.
       if (complete) {
         const last = await Notifications.getLastNotificationResponseAsync();
         const screen = last?.notification.request.content.data?.screen as string | undefined;
@@ -59,7 +71,6 @@ export default function RootLayout() {
 
     init();
 
-    // Foreground / background tap: navigate immediately (router is ready).
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
         const screen = response.notification.request.content.data?.screen;
@@ -71,7 +82,6 @@ export default function RootLayout() {
     };
   }, [setOnboardingComplete]);
 
-  // Execute the cold-start navigation once the Stack is mounted and ready.
   useEffect(() => {
     if (isReady && onboardingComplete && pendingNavRef.current) {
       router.navigate(pendingNavRef.current as any);
@@ -79,10 +89,10 @@ export default function RootLayout() {
     }
   }, [isReady, onboardingComplete]);
 
-  if (!isReady) {
+  if (!fontsLoaded || !isReady) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0a1a' }}>
-        <ActivityIndicator color="#a78bfa" size="large" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bg }}>
+        <ActivityIndicator color={COLORS.lavender} size="large" />
       </View>
     );
   }
@@ -92,10 +102,13 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: '#0a0a1a' },
-          headerTintColor: '#e2e8f0',
-          headerTitleStyle: { fontWeight: '600' },
-          contentStyle: { backgroundColor: '#0a0a1a' },
+          headerStyle: { backgroundColor: COLORS.bg },
+          headerTintColor: COLORS.lavender,
+          headerTitleStyle: {
+            fontFamily: FONTS.bodySemi,
+            color: COLORS.textBright,
+          },
+          contentStyle: { backgroundColor: COLORS.bg },
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -103,7 +116,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="dream/[id]"
-          options={{ title: 'Dream Detail', headerBackTitle: 'Back' }}
+          options={{ title: 'Dream', headerBackTitle: 'Back' }}
         />
         <Stack.Screen
           name="settings"

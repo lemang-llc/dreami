@@ -13,25 +13,22 @@ import { useRecorder } from '../../src/hooks/useRecorder';
 import { useTranscription } from '../../src/hooks/useTranscription';
 import { Waveform } from '../../src/components/Waveform';
 import { TranscriptEditor } from '../../src/components/TranscriptEditor';
+import { StarField } from '../../src/components/StarField';
 import { getDatabase } from '../../src/db/client';
 import { dreams } from '../../src/db/schema';
 import { useDreamStore } from '../../src/stores/dreamStore';
+import { COLORS, FONTS } from '../../src/theme';
 
 export default function RecordScreen() {
   const { isRecording, waveformBars, start, stop } = useRecorder();
-  const { transcribe, isTranscribing, progress, transcript, setTranscript } =
-    useTranscription();
+  const { transcribe, isTranscribing, progress, transcript, setTranscript } = useTranscription();
   const store = useDreamStore();
   const [isSaving, setIsSaving] = useState(false);
 
   const handleStartRecording = async () => {
     const granted = await start();
     if (!granted) {
-      Alert.alert(
-        'Microphone Access',
-        'Please grant microphone permission to record dreams.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Microphone Access', 'Please grant microphone permission to record dreams.', [{ text: 'OK' }]);
     }
   };
 
@@ -52,29 +49,17 @@ export default function RecordScreen() {
       Alert.alert('Empty Transcript', 'Please record or type your dream first.');
       return;
     }
-
     setIsSaving(true);
     store.setRecordingState('saving');
-
     try {
       const db = getDatabase();
       const [inserted] = await db
         .insert(dreams)
-        .values({
-          transcript: transcript.trim(),
-          audioPath: store.currentAudioUri,
-          title: 'Dream Entry',
-        })
+        .values({ transcript: transcript.trim(), audioPath: store.currentAudioUri, title: 'Dream Entry' })
         .returning({ id: dreams.id });
-
-      const dreamId = inserted.id;
-
-      // Push (not replace) so the tab stack stays in history and the
-      // native back button is visible on the dream detail screen.
-      router.push(`/dream/${dreamId}`);
-
+      router.push(`/dream/${inserted.id}`);
       store.reset();
-    } catch (e) {
+    } catch {
       Alert.alert('Save Failed', 'Could not save your dream. Please try again.');
       store.setRecordingState('editing');
     } finally {
@@ -85,100 +70,96 @@ export default function RecordScreen() {
   const handleDiscard = () => {
     Alert.alert('Discard Recording?', 'This will delete the current recording.', [
       { text: 'Keep', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: () => store.reset(),
-      },
+      { text: 'Discard', style: 'destructive', onPress: () => store.reset() },
     ]);
   };
 
   const recordingState = store.recordingState;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Idle or recording state */}
-      {(recordingState === 'idle' || recordingState === 'recording') && (
-        <View style={styles.recordSection}>
-          <Text style={styles.prompt}>
-            {recordingState === 'idle'
-              ? 'Speak your dream...'
-              : 'Recording...'}
-          </Text>
+    <View style={styles.root}>
+      <StarField />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-          <View style={styles.waveformContainer}>
-            {recordingState === 'recording' ? (
-              <Waveform bars={waveformBars} />
-            ) : (
-              <View style={styles.waveformPlaceholder}>
-                <Text style={styles.micIcon}>🎙</Text>
-              </View>
-            )}
-          </View>
-
-          <Pressable
-            style={[
-              styles.recordBtn,
-              isRecording && styles.recordBtnActive,
-            ]}
-            onPress={isRecording ? handleStopRecording : handleStartRecording}
-          >
-            <Text style={styles.recordBtnText}>
-              {isRecording ? '⏹ Stop' : '⏺ Record'}
+        {/* Idle / Recording */}
+        {(recordingState === 'idle' || recordingState === 'recording') && (
+          <View style={styles.recordSection}>
+            <Text style={styles.prompt}>
+              {recordingState === 'idle' ? 'Speak your dream…' : 'Recording…'}
             </Text>
-          </Pressable>
-        </View>
-      )}
 
-      {/* Transcribing state */}
-      {recordingState === 'transcribing' && (
-        <View style={styles.transcribingSection}>
-          <ActivityIndicator color="#a78bfa" size="large" />
-          <Text style={styles.transcribingText}>Transcribing...</Text>
-          <Text style={styles.transcribingProgress}>
-            {Math.round(progress * 100)}%
-          </Text>
-        </View>
-      )}
-
-      {/* Editing state */}
-      {(recordingState === 'editing' || recordingState === 'saving') && (
-        <View style={styles.editSection}>
-          <Text style={styles.editHint}>
-            Review and edit your dream transcript, then save.
-          </Text>
-
-          <TranscriptEditor
-            value={transcript}
-            onChange={setTranscript}
-          />
-
-          <View style={styles.editActions}>
-            <Pressable style={styles.discardBtn} onPress={handleDiscard}>
-              <Text style={styles.discardBtnText}>Discard</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
-              onPress={handleSave}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator color="#fff" />
+            <View style={styles.waveformContainer}>
+              {recordingState === 'recording' ? (
+                <Waveform bars={waveformBars} color={COLORS.lavender} />
               ) : (
-                <Text style={styles.saveBtnText}>Save Dream</Text>
+                <View style={styles.waveformPlaceholder}>
+                  <Text style={styles.micEmoji}>🎙</Text>
+                </View>
               )}
+            </View>
+
+            <Pressable
+              style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
+              onPress={isRecording ? handleStopRecording : handleStartRecording}
+            >
+              <Text style={styles.recordBtnEmoji}>{isRecording ? '⏹' : '⏺'}</Text>
+              <Text style={styles.recordBtnLabel}>
+                {isRecording ? 'Stop' : 'Record'}
+              </Text>
             </Pressable>
           </View>
-        </View>
-      )}
-    </ScrollView>
+        )}
+
+        {/* Transcribing */}
+        {recordingState === 'transcribing' && (
+          <View style={styles.transcribingSection}>
+            <ActivityIndicator color={COLORS.lavender} size="large" />
+            <Text style={styles.transcribingText}>Transcribing…</Text>
+            <Text style={styles.transcribingProgress}>{Math.round(progress * 100)}%</Text>
+          </View>
+        )}
+
+        {/* Editing / Saving */}
+        {(recordingState === 'editing' || recordingState === 'saving') && (
+          <View style={styles.editSection}>
+            <Text style={styles.editHint}>
+              Review and edit your dream, then save.
+            </Text>
+
+            <TranscriptEditor value={transcript} onChange={setTranscript} />
+
+            <View style={styles.editActions}>
+              <Pressable style={styles.discardBtn} onPress={handleDiscard}>
+                <Text style={styles.discardBtnText}>Discard</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Save Dream</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#0a0a1a',
+    backgroundColor: COLORS.bg,
+  },
+  scroll: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   content: {
     flexGrow: 1,
@@ -188,101 +169,124 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 400,
+    minHeight: 420,
+    gap: 0,
   },
   prompt: {
-    color: '#94a3b8',
+    color: COLORS.textMid,
+    fontFamily: FONTS.cinzelReg,
     fontSize: 18,
-    marginBottom: 32,
+    letterSpacing: 0.5,
+    marginBottom: 40,
   },
   waveformContainer: {
-    marginBottom: 48,
+    marginBottom: 52,
     height: 64,
     justifyContent: 'center',
   },
   waveformPlaceholder: {
     alignItems: 'center',
   },
-  micIcon: {
+  micEmoji: {
     fontSize: 48,
-    opacity: 0.3,
+    opacity: 0.2,
   },
   recordBtn: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 50,
-    width: 100,
-    height: 100,
+    backgroundColor: COLORS.surface,
+    borderRadius: 60,
+    width: 120,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#6c63ff',
+    borderWidth: 2,
+    borderColor: COLORS.lavenderMid,
+    gap: 4,
+    // Glow
+    shadowColor: COLORS.lavender,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    elevation: 10,
   },
   recordBtnActive: {
-    backgroundColor: '#2d1b4e',
-    borderColor: '#f87171',
+    borderColor: COLORS.rose,
+    backgroundColor: COLORS.rose + '18',
+    shadowColor: COLORS.rose,
   },
-  recordBtnText: {
-    color: '#e2e8f0',
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 4,
+  recordBtnEmoji: {
+    fontSize: 28,
+  },
+  recordBtnLabel: {
+    color: COLORS.textMid,
+    fontFamily: FONTS.bodyMed,
+    fontSize: 13,
   },
   transcribingSection: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    gap: 18,
     minHeight: 300,
   },
   transcribingText: {
-    color: '#94a3b8',
+    color: COLORS.textMid,
+    fontFamily: FONTS.cinzelReg,
     fontSize: 16,
+    letterSpacing: 0.5,
   },
   transcribingProgress: {
-    color: '#a78bfa',
-    fontSize: 28,
-    fontWeight: '700',
+    color: COLORS.lavender,
+    fontFamily: FONTS.cinzel,
+    fontSize: 36,
   },
   editSection: {
     flex: 1,
   },
   editHint: {
-    color: '#475569',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 13,
-    marginBottom: 12,
+    marginBottom: 4,
     textAlign: 'center',
   },
   editActions: {
     flexDirection: 'row',
     gap: 12,
     marginTop: 16,
+    paddingHorizontal: 16,
   },
   discardBtn: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2d2d4e',
+    borderColor: COLORS.border,
   },
   discardBtnText: {
-    color: '#94a3b8',
+    color: COLORS.textMid,
+    fontFamily: FONTS.bodyMed,
     fontSize: 15,
   },
   saveBtn: {
     flex: 2,
-    backgroundColor: '#6c63ff',
-    borderRadius: 12,
+    backgroundColor: COLORS.lavenderDeep,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+    shadowColor: COLORS.lavender,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
   },
   saveBtnDisabled: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
   saveBtnText: {
     color: '#ffffff',
+    fontFamily: FONTS.bodySemi,
     fontSize: 15,
-    fontWeight: '700',
   },
 });

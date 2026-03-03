@@ -16,16 +16,8 @@ import { eq } from 'drizzle-orm';
 import { indexDream, embedDream } from '../../src/rag/pipeline';
 import { processDream } from '../../src/llm/summarizer';
 import { useDebugMemory } from '../../src/hooks/useDebugMemory';
-
-const MOOD_COLORS: Record<string, string> = {
-  vivid: '#a78bfa',
-  anxious: '#f97316',
-  peaceful: '#34d399',
-  strange: '#60a5fa',
-  dark: '#6b7280',
-  joyful: '#fbbf24',
-  neutral: '#9ca3af',
-};
+import { StarField } from '../../src/components/StarField';
+import { COLORS, MOOD_COLORS, FONTS } from '../../src/theme';
 
 export default function DreamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,63 +28,40 @@ export default function DreamDetailScreen() {
   const [editTranscript, setEditTranscript] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isReprocessing, setIsReprocessing] = useState(false);
-  const [reprocessProgress, setReprocessProgress] = useState(0); // 0–100
+  const [reprocessProgress, setReprocessProgress] = useState(0);
   const mem = useDebugMemory();
-  // Track progress in a ref to avoid re-rendering on every LLM token.
-  // Only flush to state at a throttled rate.
   const progressRef = useRef(0);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Safe back navigation: go back in the stack if possible, otherwise fall
-  // back to the Dreams tab. This handles entry paths that have no back stack
-  // (deep links, cold-start notification taps, etc.).
   const goBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.navigate('/(tabs)');
-    }
+    if (router.canGoBack()) router.back();
+    else router.navigate('/(tabs)');
   };
 
-  // Guard setState / Alert calls against the unmounted-component case
-  // (user navigates back while analysis is still running).
   const isMountedRef = useRef(true);
   useEffect(() => () => { isMountedRef.current = false; }, []);
 
   const load = useCallback(async () => {
     if (!id) return;
     const db = getDatabase();
-    const [row] = await db
-      .select()
-      .from(dreams)
-      .where(eq(dreams.id, parseInt(id, 10)));
-    if (row) {
-      setDream(row);
-      setEditTranscript(row.transcript);
-    }
+    const [row] = await db.select().from(dreams).where(eq(dreams.id, parseInt(id, 10)));
+    if (row) { setDream(row); setEditTranscript(row.transcript); }
     setIsLoading(false);
   }, [id]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     navigation.setOptions({
-      title: dream?.title || 'Dream Detail',
+      title: dream?.title || 'Dream',
       headerRight: () =>
         isReprocessing ? (
-          // During analysis: "Done" navigates back while processing continues
-          // in the background. isMountedRef guards prevent stale setState calls.
           <Pressable onPress={goBack} style={{ marginRight: 16 }}>
-            <Text style={{ color: '#a78bfa', fontSize: 16 }}>Done</Text>
+            <Text style={{ color: COLORS.lavender, fontFamily: FONTS.bodyMed, fontSize: 16 }}>Done</Text>
           </Pressable>
         ) : (
-          <Pressable
-            onPress={() => setIsEditing((v) => !v)}
-            style={{ marginRight: 16 }}
-          >
-            <Text style={{ color: '#a78bfa', fontSize: 16 }}>
+          <Pressable onPress={() => setIsEditing((v) => !v)} style={{ marginRight: 16 }}>
+            <Text style={{ color: COLORS.lavender, fontFamily: FONTS.bodyMed, fontSize: 16 }}>
               {isEditing ? 'Cancel' : 'Edit'}
             </Text>
           </Pressable>
@@ -103,18 +72,11 @@ export default function DreamDetailScreen() {
   const handleSave = async () => {
     if (!dream || !id) return;
     setIsSaving(true);
-
     try {
       const db = getDatabase();
-      await db
-        .update(dreams)
-        .set({
-          transcript: editTranscript.trim(),
-          isProcessed: false,
-          updatedAt: new Date().toISOString(),
-        })
+      await db.update(dreams)
+        .set({ transcript: editTranscript.trim(), isProcessed: false, updatedAt: new Date().toISOString() })
         .where(eq(dreams.id, dream.id));
-
       setIsEditing(false);
       load();
     } catch {
@@ -132,8 +94,7 @@ export default function DreamDetailScreen() {
         style: 'destructive',
         onPress: async () => {
           if (!dream) return;
-          const db = getDatabase();
-          await db.delete(dreams).where(eq(dreams.id, dream.id));
+          await getDatabase().delete(dreams).where(eq(dreams.id, dream.id));
           goBack();
         },
       },
@@ -146,8 +107,6 @@ export default function DreamDetailScreen() {
     setReprocessProgress(0);
     progressRef.current = 0;
 
-    // Flush progress ref → state at most every 500ms to avoid
-    // re-rendering on every LLM token (256 renders → OOM).
     progressTimerRef.current = setInterval(() => {
       setReprocessProgress(progressRef.current);
     }, 500);
@@ -159,47 +118,29 @@ export default function DreamDetailScreen() {
         .where(eq(dreams.id, dream.id));
       if (isMountedRef.current) setDream((d) => d ? { ...d, isProcessed: false } : d);
 
-      // Phase 1: FTS5 index (instant, no model loading)
       await indexDream(dream.id, dream.transcript);
       progressRef.current = 10;
 
-      // Phase 2: LLM summarization (10 → 70%)
-      await processDream(dream.id, (p) => {
-        progressRef.current = 10 + Math.round(p * 60);
-      });
+      await processDream(dream.id, (p) => { progressRef.current = 10 + Math.round(p * 60); });
       progressRef.current = 70;
 
-      // Phase 3: Embedding index (70 → 100%) — crash-safe, one chunk at a time.
-      // Silently skips if the embedding model is not downloaded.
-      await embedDream(dream.id, dream.transcript, (p) => {
-        progressRef.current = 70 + Math.round(p * 30);
-      });
+      await embedDream(dream.id, dream.transcript, (p) => { progressRef.current = 70 + Math.round(p * 30); });
 
       progressRef.current = 100;
-      if (isMountedRef.current) {
-        setReprocessProgress(100);
-        await load();
-      }
+      if (isMountedRef.current) { setReprocessProgress(100); await load(); }
     } catch {
-      if (isMountedRef.current) {
-        Alert.alert('Processing Failed', 'Could not analyse this dream. Make sure the AI model is downloaded.');
-      }
+      if (isMountedRef.current) Alert.alert('Processing Failed', 'Could not analyse this dream. Make sure the AI model is downloaded.');
     } finally {
-      if (progressTimerRef.current) {
-        clearInterval(progressTimerRef.current);
-        progressTimerRef.current = null;
-      }
-      if (isMountedRef.current) {
-        setIsReprocessing(false);
-        setReprocessProgress(0);
-      }
+      if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null; }
+      if (isMountedRef.current) { setIsReprocessing(false); setReprocessProgress(0); }
     }
   };
 
   if (isLoading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color="#a78bfa" />
+        <StarField />
+        <ActivityIndicator color={COLORS.lavender} />
       </View>
     );
   }
@@ -207,139 +148,133 @@ export default function DreamDetailScreen() {
   if (!dream) {
     return (
       <View style={styles.centered}>
+        <StarField />
         <Text style={styles.notFound}>Dream not found.</Text>
       </View>
     );
   }
 
   const tags: string[] = (() => {
-    try {
-      return JSON.parse(dream.tags ?? '[]');
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(dream.tags ?? '[]'); } catch { return []; }
   })();
 
   const dateStr = new Date(dream.createdAt).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
   const moodColor = MOOD_COLORS[dream.mood ?? 'neutral'] ?? MOOD_COLORS.neutral;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Memory debug panel */}
-      <MemoryDebugPanel mem={mem} />
+    <View style={styles.root}>
+      <StarField />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <MemoryDebugPanel mem={mem} />
 
-      {/* Header */}
-      <Text style={styles.date}>{dateStr}</Text>
+        {/* Date */}
+        <Text style={styles.date}>{dateStr}</Text>
 
-      {dream.mood && (
-        <View style={styles.moodRow}>
-          <View style={[styles.moodChip, { borderColor: moodColor }]}>
-            <Text style={[styles.moodText, { color: moodColor }]}>
-              {dream.mood}
-            </Text>
+        {/* Mood + Tags */}
+        {dream.mood && (
+          <View style={styles.moodRow}>
+            <View style={[styles.moodChip, { borderColor: moodColor + '88' }]}>
+              <View style={[styles.moodDot, { backgroundColor: moodColor }]} />
+              <Text style={[styles.moodText, { color: moodColor }]}>{dream.mood}</Text>
+            </View>
+            {tags.map((tag) => (
+              <View key={tag} style={styles.tagChip}>
+                <Text style={styles.tagText}>{tag}</Text>
+              </View>
+            ))}
           </View>
-          {tags.map((tag) => (
-            <View key={tag} style={styles.tagChip}>
-              <Text style={styles.tagText}>{tag}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* Summary */}
-      {dream.summary && (
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Summary</Text>
-          <Text style={styles.summary}>{dream.summary}</Text>
-        </View>
-      )}
-
-      {isReprocessing ? (
-        <View style={styles.processingBanner}>
-          <ActivityIndicator color="#60a5fa" size="small" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.processingText}>
-              {mem.llmLoading
-                ? `Loading model… ${mem.llmLoadingElapsedSec}s`
-                : `AI analysis… ${reprocessProgress}%`}
-            </Text>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${reprocessProgress}%` }]} />
-            </View>
-          </View>
-        </View>
-      ) : (
-        !isEditing && (
-          <>
-            <Pressable style={styles.reprocessBtn} onPress={handleReprocess}>
-              <Text style={styles.reprocessBtnText}>
-                {dream.isProcessed ? '↺  Re-analyse with AI' : '✦  Analyse with AI'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.chatBtn}
-              onPress={() =>
-                router.navigate({
-                  pathname: '/(tabs)/chat',
-                  params: { dreamId: String(dream.id) },
-                })
-              }
-            >
-              <Text style={styles.chatBtnText}>💬  Chat about this dream</Text>
-            </Pressable>
-          </>
-        )
-      )}
-
-      {/* Transcript */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Transcript</Text>
-        {isEditing ? (
-          <>
-            <TextInput
-              style={styles.transcriptInput}
-              value={editTranscript}
-              onChangeText={setEditTranscript}
-              multiline
-              textAlignVertical="top"
-              autoCorrect={false}
-            />
-            <View style={styles.editActions}>
-              <Pressable
-                style={[styles.saveBtn, isSaving && { opacity: 0.6 }]}
-                onPress={handleSave}
-                disabled={isSaving}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.saveBtnText}>Save Changes</Text>
-                )}
-              </Pressable>
-            </View>
-          </>
-        ) : (
-          <Text style={styles.transcript}>{dream.transcript}</Text>
         )}
-      </View>
 
-      {/* Delete */}
-      {!isEditing && (
-        <Pressable style={styles.deleteBtn} onPress={handleDelete}>
-          <Text style={styles.deleteBtnText}>Delete Dream</Text>
-        </Pressable>
-      )}
-    </ScrollView>
+        {/* Summary */}
+        {dream.summary && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Summary</Text>
+            <Text style={styles.summary}>{dream.summary}</Text>
+          </View>
+        )}
+
+        {/* Actions */}
+        {isReprocessing ? (
+          <View style={styles.processingBanner}>
+            <ActivityIndicator color={COLORS.teal} size="small" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.processingText}>
+                {mem.llmLoading
+                  ? `Loading model… ${mem.llmLoadingElapsedSec}s`
+                  : `AI analysis… ${reprocessProgress}%`}
+              </Text>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${reprocessProgress}%` }]} />
+              </View>
+            </View>
+          </View>
+        ) : (
+          !isEditing && (
+            <>
+              <Pressable style={styles.reprocessBtn} onPress={handleReprocess}>
+                <Text style={styles.reprocessBtnText}>
+                  {dream.isProcessed ? '↺  Re-analyse with AI' : '✦  Analyse with AI'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.chatBtn}
+                onPress={() => router.navigate({ pathname: '/(tabs)/chat', params: { dreamId: String(dream.id) } })}
+              >
+                <Text style={styles.chatBtnText}>💬  Chat about this dream</Text>
+              </Pressable>
+            </>
+          )
+        )}
+
+        {/* Transcript */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Transcript</Text>
+          {isEditing ? (
+            <>
+              <TextInput
+                style={styles.transcriptInput}
+                value={editTranscript}
+                onChangeText={setEditTranscript}
+                multiline
+                textAlignVertical="top"
+                autoCorrect={false}
+                placeholderTextColor={COLORS.textFaint}
+              />
+              <View style={styles.editActions}>
+                <Pressable
+                  style={[styles.saveBtn, isSaving && { opacity: 0.6 }]}
+                  onPress={handleSave}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.saveBtnText}>Save Changes</Text>
+                  )}
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.transcript}>{dream.transcript}</Text>
+          )}
+        </View>
+
+        {/* Delete */}
+        {!isEditing && (
+          <Pressable style={styles.deleteBtn} onPress={handleDelete}>
+            <Text style={styles.deleteBtnText}>Delete Dream</Text>
+          </Pressable>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
-// Danger threshold: above this the app is at risk of OOM on iPhone 13
+// ─── Memory Debug Panel ───────────────────────────────────────────────────────
+
 const MEM_DANGER_MB = 1400;
 const MEM_WARN_MB = 900;
 const MEM_SCALE_MAX_MB = 1600;
@@ -347,12 +282,12 @@ const MEM_SCALE_MAX_MB = 1600;
 function MemoryDebugPanel({ mem }: { mem: ReturnType<typeof useDebugMemory> }) {
   const fillPct = Math.min(100, (mem.estimatedMB / MEM_SCALE_MAX_MB) * 100);
   const barColor = mem.estimatedMB >= MEM_DANGER_MB
-    ? '#f87171'
+    ? COLORS.rose
     : mem.estimatedMB >= MEM_WARN_MB
-    ? '#f97316'
-    : '#34d399';
+    ? COLORS.amber
+    : COLORS.mint;
 
-  const rows: { label: string; mb: number; loaded: boolean; loading?: boolean }[] = [
+  const rows = [
     { label: 'Whisper', mb: 638, loaded: mem.whisperLoaded },
     { label: 'LLM', mb: 800, loaded: mem.llmLoaded, loading: mem.llmLoading },
   ];
@@ -371,14 +306,14 @@ function MemoryDebugPanel({ mem }: { mem: ReturnType<typeof useDebugMemory> }) {
       {rows.map((row) => (
         <View key={row.label} style={debugStyles.row}>
           <View style={[debugStyles.dot, {
-            backgroundColor: row.loading ? '#f97316' : row.loaded ? barColor : '#2d2d4e',
+            backgroundColor: row.loading ? COLORS.amber : row.loaded ? barColor : COLORS.border,
           }]} />
           <Text style={debugStyles.rowLabel}>{row.label}</Text>
           <Text style={debugStyles.rowMb}>{row.mb} MB</Text>
-          <Text style={[debugStyles.rowStatus, { color: row.loading ? '#f97316' : row.loaded ? '#64748b' : '#2d2d4e' }]}>
-            {row.loading
-              ? `loading… ${mem.llmLoadingElapsedSec}s`
-              : row.loaded ? 'loaded' : 'released'}
+          <Text style={[debugStyles.rowStatus, {
+            color: row.loading ? COLORS.amber : row.loaded ? COLORS.textDim : COLORS.border,
+          }]}>
+            {row.loading ? `loading… ${mem.llmLoadingElapsedSec}s` : row.loaded ? 'loaded' : 'released'}
           </Text>
         </View>
       ))}
@@ -388,10 +323,10 @@ function MemoryDebugPanel({ mem }: { mem: ReturnType<typeof useDebugMemory> }) {
 
 const debugStyles = StyleSheet.create({
   panel: {
-    backgroundColor: '#0f0f1f',
-    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#1e1e3a',
+    borderColor: COLORS.border,
     padding: 12,
     marginBottom: 16,
     gap: 8,
@@ -402,26 +337,25 @@ const debugStyles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    color: '#475569',
-    fontSize: 11,
-    fontWeight: '700',
+    color: COLORS.textDim,
+    fontFamily: FONTS.bodyBold,
+    fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   total: {
+    fontFamily: FONTS.bodyBold,
     fontSize: 13,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
   },
   track: {
-    height: 6,
-    backgroundColor: '#1e1e3a',
-    borderRadius: 3,
+    height: 4,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   fill: {
-    height: 6,
-    borderRadius: 3,
+    height: 4,
+    borderRadius: 2,
   },
   row: {
     flexDirection: 'row',
@@ -429,31 +363,38 @@ const debugStyles = StyleSheet.create({
     gap: 8,
   },
   dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   rowLabel: {
-    color: '#64748b',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 12,
     width: 52,
   },
   rowMb: {
-    color: '#475569',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 12,
-    fontVariant: ['tabular-nums'],
     width: 52,
   },
   rowStatus: {
+    fontFamily: FONTS.body,
     fontSize: 12,
-    fontVariant: ['tabular-nums'],
   },
 });
 
+// ─── Main Styles ──────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#0a0a1a',
+    backgroundColor: COLORS.bg,
+  },
+  scroll: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   content: {
     padding: 20,
@@ -463,154 +404,176 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a1a',
+    backgroundColor: COLORS.bg,
   },
   notFound: {
-    color: '#64748b',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 16,
   },
   date: {
-    color: '#475569',
-    fontSize: 13,
-    marginBottom: 12,
+    color: COLORS.textDim,
+    fontFamily: FONTS.cinzelReg,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    marginBottom: 14,
   },
   moodRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 22,
   },
   moodChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 5,
+  },
+  moodDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   moodText: {
+    fontFamily: FONTS.bodyMed,
     fontSize: 13,
-    fontWeight: '600',
     textTransform: 'capitalize',
   },
   tagChip: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   tagText: {
-    color: '#64748b',
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 12,
   },
   section: {
     marginBottom: 24,
   },
   sectionLabel: {
-    color: '#475569',
-    fontSize: 11,
-    fontWeight: '700',
+    color: COLORS.lavenderMid,
+    fontFamily: FONTS.cinzel,
+    fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 8,
+    letterSpacing: 1.2,
+    marginBottom: 10,
+    opacity: 0.85,
   },
   summary: {
-    color: '#94a3b8',
+    color: COLORS.textMid,
+    fontFamily: FONTS.body,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 23,
   },
   transcript: {
-    color: '#e2e8f0',
+    color: COLORS.textBright,
+    fontFamily: FONTS.body,
     fontSize: 15,
-    lineHeight: 24,
+    lineHeight: 25,
   },
   transcriptInput: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
     padding: 14,
-    color: '#e2e8f0',
+    color: COLORS.textBright,
+    fontFamily: FONTS.body,
     fontSize: 15,
     lineHeight: 22,
     minHeight: 200,
     borderWidth: 1,
-    borderColor: '#2d2d4e',
+    borderColor: COLORS.border,
   },
   editActions: {
     marginTop: 12,
   },
   saveBtn: {
-    backgroundColor: '#6c63ff',
-    borderRadius: 12,
+    backgroundColor: COLORS.lavenderDeep,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
   },
   saveBtnText: {
     color: '#fff',
+    fontFamily: FONTS.bodySemi,
     fontSize: 15,
-    fontWeight: '700',
   },
   processingBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#1e3a5f',
-    borderRadius: 10,
-    padding: 10,
+    gap: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.teal + '44',
   },
   processingText: {
-    color: '#60a5fa',
+    color: COLORS.teal,
+    fontFamily: FONTS.bodyMed,
     fontSize: 13,
     marginBottom: 6,
   },
   progressTrack: {
-    height: 4,
-    backgroundColor: '#1e3a5f',
+    height: 3,
+    backgroundColor: COLORS.border,
     borderRadius: 2,
     overflow: 'hidden',
   },
   progressFill: {
-    height: 4,
-    backgroundColor: '#60a5fa',
+    height: 3,
+    backgroundColor: COLORS.teal,
     borderRadius: 2,
   },
   reprocessBtn: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    paddingVertical: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    paddingVertical: 11,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2d2d4e',
+    borderColor: COLORS.border,
     marginBottom: 8,
   },
   reprocessBtnText: {
-    color: '#a78bfa',
+    color: COLORS.lavender,
+    fontFamily: FONTS.bodySemi,
     fontSize: 14,
-    fontWeight: '600',
   },
   chatBtn: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    paddingVertical: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    paddingVertical: 11,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2d2d4e',
-    marginBottom: 16,
+    borderColor: COLORS.teal + '55',
+    marginBottom: 20,
   },
   chatBtnText: {
-    color: '#60a5fa',
+    color: COLORS.teal,
+    fontFamily: FONTS.bodySemi,
     fontSize: 14,
-    fontWeight: '600',
   },
   deleteBtn: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#3d1a1a',
+    borderColor: COLORS.rose + '44',
     marginTop: 8,
   },
   deleteBtnText: {
-    color: '#f87171',
+    color: COLORS.rose,
+    fontFamily: FONTS.bodyMed,
     fontSize: 15,
   },
 });

@@ -1,5 +1,5 @@
 {
-  "name": "dream-diary",
+  "name": "dreami",
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
@@ -9,6 +9,8 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo-google-fonts/cinzel": "^0.4.2",
+    "@expo-google-fonts/outfit": "^0.4.3",
     "drizzle-orm": "^0.38.4",
     "expo": "~55.0.3",
     "expo-audio": "~55.0.8",

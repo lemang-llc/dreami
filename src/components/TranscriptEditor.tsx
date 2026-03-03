@@ -1,10 +1,6 @@
 import React from 'react';
-import {
-  View,
-  TextInput,
-  Text,
-  StyleSheet,
-} from 'react-native';
+import { View, TextInput, Text, StyleSheet } from 'react-native';
+import { COLORS, FONTS } from '../theme';
 
 interface TranscriptEditorProps {
   value: string;
@@ -15,7 +11,7 @@ interface TranscriptEditorProps {
 export function TranscriptEditor({
   value,
   onChange,
-  placeholder = 'Your dream transcript will appear here. Edit as needed...',
+  placeholder = 'Your dream transcript will appear here. Edit as needed…',
 }: TranscriptEditorProps) {
   const wordCount = value.trim().split(/\s+/).filter(Boolean).length;
 
@@ -30,7 +26,7 @@ export function TranscriptEditor({
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
-        placeholderTextColor="#475569"
+        placeholderTextColor={COLORS.textFaint}
         multiline
         textAlignVertical="top"
         scrollEnabled={false}
@@ -53,25 +49,27 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   label: {
-    color: '#94a3b8',
-    fontSize: 13,
-    fontWeight: '600',
+    color: COLORS.textMid,
+    fontSize: 11,
+    fontFamily: FONTS.bodyBold,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   wordCount: {
-    color: '#475569',
+    color: COLORS.textDim,
     fontSize: 12,
+    fontFamily: FONTS.body,
   },
   input: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
     padding: 14,
-    color: '#e2e8f0',
+    color: COLORS.textBright,
     fontSize: 15,
+    fontFamily: FONTS.body,
     lineHeight: 22,
     minHeight: 160,
     borderWidth: 1,
-    borderColor: '#2d2d4e',
+    borderColor: COLORS.border,
   },
 });
