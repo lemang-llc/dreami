@@ -73,8 +73,13 @@ function formatSessionDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const SILENCE_DB = -40;
+// Minimum dBFS to count as speech. -40 picks up ambient noise; -28 requires
+// clearly audible voice (normal speech: -20 to -5 dBFS).
+const SILENCE_DB = -28;
 const SILENCE_AFTER_SPEECH_MS = 1200;
+// How long audio must stay above SILENCE_DB before we consider it "speech".
+// Filters out brief transient noise bursts (coughs, door slams, HVAC spikes).
+const MIN_SPEECH_MS = 250;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -341,6 +346,7 @@ export default function ChatScreen() {
 
       startRecording().then(() => {
         let hasSpeech = false;
+        let speechSince: number | null = null;  // when audio first crossed threshold
         let silenceSince: number | null = null;
 
         const iv = setInterval(() => {
@@ -348,16 +354,27 @@ export default function ChatScreen() {
             clearInterval(iv); vadIntervalRef.current = null; resolve(null); return;
           }
           const db = getMetering();
-          if (db > SILENCE_DB) { hasSpeech = true; silenceSince = null; }
-          else if (hasSpeech) {
-            if (!silenceSince) { silenceSince = Date.now(); return; }
-            if (Date.now() - silenceSince < SILENCE_AFTER_SPEECH_MS) return;
-            clearInterval(iv); vadIntervalRef.current = null;
-            setConvPhase('transcribing'); setVoiceState('transcribing');
-            stopRecording()
-              .then((r) => transcribeAudio(r.uri))
-              .then((t) => resolve(t.text.trim() || null))
-              .catch(() => resolve(null));
+          if (db > SILENCE_DB) {
+            // Track how long the loud audio has been sustained
+            if (!speechSince) speechSince = Date.now();
+            if (!hasSpeech && Date.now() - speechSince >= MIN_SPEECH_MS) {
+              hasSpeech = true;
+            }
+            silenceSince = null;
+          } else {
+            if (!hasSpeech) {
+              // Brief spike below threshold before confirming speech — reset clock
+              speechSince = null;
+            } else {
+              if (!silenceSince) { silenceSince = Date.now(); return; }
+              if (Date.now() - silenceSince < SILENCE_AFTER_SPEECH_MS) return;
+              clearInterval(iv); vadIntervalRef.current = null;
+              setConvPhase('transcribing'); setVoiceState('transcribing');
+              stopRecording()
+                .then((r) => transcribeAudio(r.uri))
+                .then((t) => resolve(t.text.trim() || null))
+                .catch(() => resolve(null));
+            }
           }
         }, 100);
 
