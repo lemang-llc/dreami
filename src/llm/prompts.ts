@@ -1,11 +1,10 @@
-export const SUMMARIZE_PROMPT = (transcript: string) => `You are a dream analyst. Given this dream transcript, provide:
-1. A short title (5 words max)
-2. A 2-sentence summary
-3. Mood: one of [vivid, anxious, peaceful, strange, dark, joyful, neutral]
-4. Tags: 3-5 keywords (JSON array)
+export const SUMMARIZE_PROMPT = (transcript: string) => `You are a dream analyst. Analyze the dream transcript below and respond with ONLY a single valid JSON object — no other text before or after it.
 
-Respond ONLY in valid JSON with no additional text:
-{"title":"","summary":"","mood":"","tags":[]}
+JSON fields:
+- "title": string, 5 words or fewer
+- "summary": string, exactly 2 sentences
+- "mood": exactly one of: vivid, anxious, peaceful, strange, dark, joyful, neutral
+- "tags": array of 3 to 5 keyword strings
 
 Transcript: ${transcript}`;
 

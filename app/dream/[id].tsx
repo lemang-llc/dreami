@@ -15,7 +15,6 @@ import { dreams, Dream } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { indexDream, embedDream } from '../../src/rag/pipeline';
 import { processDream } from '../../src/llm/summarizer';
-import { useDebugMemory } from '../../src/hooks/useDebugMemory';
 import { StarField } from '../../src/components/StarField';
 import { COLORS, MOOD_COLORS, FONTS } from '../../src/theme';
 
@@ -29,7 +28,6 @@ export default function DreamDetailScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [reprocessProgress, setReprocessProgress] = useState(0);
-  const mem = useDebugMemory();
   const progressRef = useRef(0);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -168,8 +166,6 @@ export default function DreamDetailScreen() {
     <View style={styles.root}>
       <StarField />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <MemoryDebugPanel mem={mem} />
-
         {/* Date */}
         <Text style={styles.date}>{dateStr}</Text>
 
@@ -202,9 +198,7 @@ export default function DreamDetailScreen() {
             <ActivityIndicator color={COLORS.teal} size="small" />
             <View style={{ flex: 1 }}>
               <Text style={styles.processingText}>
-                {mem.llmLoading
-                  ? `Loading model… ${mem.llmLoadingElapsedSec}s`
-                  : `AI analysis… ${reprocessProgress}%`}
+                {`AI analysis… ${reprocessProgress}%`}
               </Text>
               <View style={styles.progressTrack}>
                 <View style={[styles.progressFill, { width: `${reprocessProgress}%` }]} />
@@ -272,118 +266,6 @@ export default function DreamDetailScreen() {
     </View>
   );
 }
-
-// ─── Memory Debug Panel ───────────────────────────────────────────────────────
-
-const MEM_DANGER_MB = 1400;
-const MEM_WARN_MB = 900;
-const MEM_SCALE_MAX_MB = 1600;
-
-function MemoryDebugPanel({ mem }: { mem: ReturnType<typeof useDebugMemory> }) {
-  const fillPct = Math.min(100, (mem.estimatedMB / MEM_SCALE_MAX_MB) * 100);
-  const barColor = mem.estimatedMB >= MEM_DANGER_MB
-    ? COLORS.rose
-    : mem.estimatedMB >= MEM_WARN_MB
-    ? COLORS.amber
-    : COLORS.mint;
-
-  const rows = [
-    { label: 'Whisper', mb: 638, loaded: mem.whisperLoaded },
-    { label: 'LLM', mb: 800, loaded: mem.llmLoaded, loading: mem.llmLoading },
-  ];
-
-  return (
-    <View style={debugStyles.panel}>
-      <View style={debugStyles.header}>
-        <Text style={debugStyles.title}>Memory (estimated)</Text>
-        <Text style={[debugStyles.total, { color: barColor }]}>
-          {mem.estimatedMB.toLocaleString()} MB
-        </Text>
-      </View>
-      <View style={debugStyles.track}>
-        <View style={[debugStyles.fill, { width: `${fillPct}%` as any, backgroundColor: barColor }]} />
-      </View>
-      {rows.map((row) => (
-        <View key={row.label} style={debugStyles.row}>
-          <View style={[debugStyles.dot, {
-            backgroundColor: row.loading ? COLORS.amber : row.loaded ? barColor : COLORS.border,
-          }]} />
-          <Text style={debugStyles.rowLabel}>{row.label}</Text>
-          <Text style={debugStyles.rowMb}>{row.mb} MB</Text>
-          <Text style={[debugStyles.rowStatus, {
-            color: row.loading ? COLORS.amber : row.loaded ? COLORS.textDim : COLORS.border,
-          }]}>
-            {row.loading ? `loading… ${mem.llmLoadingElapsedSec}s` : row.loaded ? 'loaded' : 'released'}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-const debugStyles = StyleSheet.create({
-  panel: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 12,
-    marginBottom: 16,
-    gap: 8,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    color: COLORS.textDim,
-    fontFamily: FONTS.bodyBold,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  total: {
-    fontFamily: FONTS.bodyBold,
-    fontSize: 13,
-  },
-  track: {
-    height: 4,
-    backgroundColor: COLORS.border,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  fill: {
-    height: 4,
-    borderRadius: 2,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  rowLabel: {
-    color: COLORS.textDim,
-    fontFamily: FONTS.body,
-    fontSize: 12,
-    width: 52,
-  },
-  rowMb: {
-    color: COLORS.textDim,
-    fontFamily: FONTS.body,
-    fontSize: 12,
-    width: 52,
-  },
-  rowStatus: {
-    fontFamily: FONTS.body,
-    fontSize: 12,
-  },
-});
 
 // ─── Main Styles ──────────────────────────────────────────────────────────────
 

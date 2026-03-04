@@ -1,4 +1,4 @@
-import { getLlmContext } from '../models/llmContext';
+import { getLlmContext, releaseLlmContext } from '../models/llmContext';
 import { SUMMARIZE_PROMPT } from './prompts';
 import { getDatabase } from '../db/client';
 import { dreams } from '../db/schema';
@@ -15,7 +15,22 @@ export interface DreamSummary {
 
 const VALID_MOODS = ['vivid', 'anxious', 'peaceful', 'strange', 'dark', 'joyful', 'neutral'];
 
-const SUMMARIZE_N_PREDICT = 256;
+const SUMMARIZE_N_PREDICT = 350;
+
+// JSON schema passed to llama.rn's grammar-constrained sampler.
+// The model is physically forced to emit valid JSON matching this schema —
+// it cannot produce prose, preamble, or malformed output.
+const SUMMARY_JSON_SCHEMA = JSON.stringify({
+  type: 'object',
+  properties: {
+    title:   { type: 'string' },
+    summary: { type: 'string' },
+    mood:    { type: 'string', enum: VALID_MOODS },
+    tags:    { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 5 },
+  },
+  required: ['title', 'summary', 'mood', 'tags'],
+  additionalProperties: false,
+});
 
 export async function summarizeDream(
   transcript: string,
@@ -48,19 +63,27 @@ export async function summarizeDream(
   // Use the return value instead of accumulating token strings in JS.
   // This keeps all string building on the native side and crosses the bridge
   // only once at the end, avoiding heap pressure during token generation.
-  const result = await ctx.completion(
-    {
-      prompt,
-      n_predict: SUMMARIZE_N_PREDICT,
-      temperature: 0.3,
-      top_p: 0.9,
-      stop: ['<|eot_id|>', '<|end_of_text|>'],
-    },
-    (_data) => {
-      tokensGenerated++;
-      onProgress?.(tokensGenerated / SUMMARIZE_N_PREDICT);
-    }
-  );
+  let result: Awaited<ReturnType<typeof ctx.completion>>;
+  try {
+    result = await ctx.completion(
+      {
+        prompt,
+        json_schema: SUMMARY_JSON_SCHEMA,
+        n_predict: SUMMARIZE_N_PREDICT,
+        temperature: 0.3,
+        top_p: 0.9,
+        stop: ['<|eot_id|>', '<|end_of_text|>'],
+      },
+      (_data) => {
+        tokensGenerated++;
+        onProgress?.(tokensGenerated / SUMMARIZE_N_PREDICT);
+      }
+    );
+  } catch (e) {
+    // Release the singleton so the next attempt gets a fresh context.
+    await releaseLlmContext();
+    throw e;
+  }
 
   // llama.rn echoes the full prompt in result.text — extract only the
   // generated portion (same pattern used in chat.ts).
@@ -74,33 +97,59 @@ export async function summarizeDream(
   return parseSummaryJson(clean);
 }
 
-function parseSummaryJson(text: string): DreamSummary {
-  try {
-    // Extract JSON from the response (handles extra text before/after)
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('No JSON found');
-
-    const parsed = JSON.parse(match[0]);
-
-    const mood = VALID_MOODS.includes(parsed.mood) ? parsed.mood : 'neutral';
-    const tags = Array.isArray(parsed.tags)
-      ? parsed.tags.filter((t: unknown) => typeof t === 'string').slice(0, 5)
-      : [];
-
-    return {
-      title: (parsed.title || 'Untitled Dream').slice(0, 60),
-      summary: parsed.summary || '',
-      mood,
-      tags,
-    };
-  } catch {
-    return {
-      title: 'Dream Entry',
-      summary: '',
-      mood: 'neutral',
-      tags: [],
-    };
+// Walk the string tracking brace depth and string escapes to find
+// the span of one complete JSON object starting at `start`.
+function extractBalancedObject(text: string, start: number): string | null {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (escape)               { escape = false; continue; }
+    if (c === '\\' && inString) { escape = true;  continue; }
+    if (c === '"')              { inString = !inString; continue; }
+    if (inString)               { continue; }
+    if (c === '{')              { depth++; }
+    else if (c === '}')         { depth--; if (depth === 0) return text.slice(start, i + 1); }
   }
+  return null;
+}
+
+function parseSummaryJson(text: string): DreamSummary {
+  // Collect every well-formed JSON object in the output (the model sometimes
+  // emits a template or prose before the real answer).  We take the LAST one
+  // that contains at least one of the expected fields.
+  const candidates: object[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    const raw = extractBalancedObject(text, i);
+    if (!raw) continue;
+    try {
+      const obj = JSON.parse(raw);
+      if (obj && typeof obj === 'object') candidates.push(obj);
+    } catch { /* skip malformed spans */ }
+    i += raw.length - 1; // advance past this object
+  }
+
+  const parsed = candidates
+    .filter((c: any) => c.title || c.summary || c.mood || c.tags)
+    .at(-1) as any;
+
+  if (!parsed) {
+    throw new Error('LLM returned no parseable JSON');
+  }
+
+  const mood = VALID_MOODS.includes(parsed.mood) ? parsed.mood : 'neutral';
+  const tags = Array.isArray(parsed.tags)
+    ? parsed.tags.filter((t: unknown) => typeof t === 'string').slice(0, 5)
+    : [];
+
+  return {
+    title: (parsed.title || 'Untitled Dream').slice(0, 60),
+    summary: parsed.summary || '',
+    mood,
+    tags,
+  };
 }
 
 /**
@@ -134,23 +183,16 @@ export async function processDream(
     return;
   }
 
-  try {
-    const summary = await summarizeDream(dream.transcript, onProgress);
-    await db
-      .update(dreams)
-      .set({
-        title: summary.title,
-        summary: summary.summary,
-        mood: summary.mood,
-        tags: JSON.stringify(summary.tags),
-        isProcessed: true,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(dreams.id, dreamId));
-  } catch {
-    // Mark processed even on failure so the UI stops spinning
-    await db.update(dreams)
-      .set({ isProcessed: true, updatedAt: new Date().toISOString() })
-      .where(eq(dreams.id, dreamId));
-  }
+  const summary = await summarizeDream(dream.transcript, onProgress);
+  await db
+    .update(dreams)
+    .set({
+      title: summary.title,
+      summary: summary.summary,
+      mood: summary.mood,
+      tags: JSON.stringify(summary.tags),
+      isProcessed: true,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(dreams.id, dreamId));
 }
