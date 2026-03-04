@@ -38,6 +38,24 @@ CREATE TABLE IF NOT EXISTS dream_chunks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_dream_chunks_dream_id ON dream_chunks(dream_id);
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dream_id INTEGER REFERENCES dreams(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_dream_id ON chat_sessions(dream_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
 `;
 
 let _db: ReturnType<typeof drizzle> | null = null;

@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
-import { useLocalSearchParams, router, useNavigation } from 'expo-router';
+import { useLocalSearchParams, router, useNavigation, useFocusEffect } from 'expo-router';
 import { getDatabase } from '../../src/db/client';
 import { dreams, Dream } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
@@ -17,6 +17,12 @@ import { indexDream, embedDream } from '../../src/rag/pipeline';
 import { processDream } from '../../src/llm/summarizer';
 import { StarField } from '../../src/components/StarField';
 import { COLORS, MOOD_COLORS, FONTS } from '../../src/theme';
+import { getDreamSessions, SessionSummary } from '../../src/db/chatHistory';
+
+function formatSessionDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 export default function DreamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,6 +34,7 @@ export default function DreamDetailScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [reprocessProgress, setReprocessProgress] = useState(0);
+  const [dreamSessions, setDreamSessions] = useState<SessionSummary[]>([]);
   const progressRef = useRef(0);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -48,6 +55,16 @@ export default function DreamDetailScreen() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Refresh sessions whenever this screen gains focus (e.g. returning from chat)
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      getDreamSessions(parseInt(id, 10))
+        .then(setDreamSessions)
+        .catch(() => {});
+    }, [id]),
+  );
 
   useEffect(() => {
     navigation.setOptions({
@@ -256,6 +273,33 @@ export default function DreamDetailScreen() {
           )}
         </View>
 
+        {/* Previous Chats */}
+        {dreamSessions.length > 0 && !isEditing && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Previous Chats</Text>
+            {dreamSessions.map((s) => (
+              <Pressable
+                key={s.id}
+                style={styles.chatHistoryRow}
+                onPress={() =>
+                  router.navigate({
+                    pathname: '/(tabs)/chat',
+                    params: { sessionId: String(s.id) },
+                  })
+                }
+              >
+                <View style={styles.chatHistoryContent}>
+                  <Text style={styles.chatHistoryDate}>{formatSessionDate(s.updatedAt)}</Text>
+                  <Text style={styles.chatHistoryPreview} numberOfLines={1}>
+                    {s.preview || 'Chat session'}
+                  </Text>
+                </View>
+                <Text style={styles.chatHistoryArrow}>›</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
         {/* Delete */}
         {!isEditing && (
           <Pressable style={styles.deleteBtn} onPress={handleDelete}>
@@ -444,6 +488,39 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodySemi,
     fontSize: 14,
   },
+
+  // Previous Chats
+  chatHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  chatHistoryContent: {
+    flex: 1,
+    gap: 3,
+  },
+  chatHistoryDate: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.bodyMed,
+    fontSize: 11,
+  },
+  chatHistoryPreview: {
+    color: COLORS.textMid,
+    fontFamily: FONTS.body,
+    fontSize: 13,
+  },
+  chatHistoryArrow: {
+    color: COLORS.textDim,
+    fontSize: 20,
+    marginLeft: 8,
+  },
+
   deleteBtn: {
     backgroundColor: COLORS.surface,
     borderRadius: 14,

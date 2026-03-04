@@ -10,7 +10,10 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Modal,
+  ScrollView,
 } from 'react-native';
+import { useLocalSearchParams, useNavigation, router } from 'expo-router';
 import { useChatStore } from '../../src/stores/chatStore';
 import { ChatBubble, StreamingBubble } from '../../src/components/ChatBubble';
 import { StarField } from '../../src/components/StarField';
@@ -25,11 +28,18 @@ import {
 import { transcribeAudio } from '../../src/audio/transcriber';
 import { speakText, stopSpeaking } from '../../src/audio/tts';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { useLocalSearchParams } from 'expo-router';
 import { getDatabase } from '../../src/db/client';
-import { dreams, Dream } from '../../src/db/schema';
+import { dreams, Dream, chatSessions } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { COLORS, FONTS } from '../../src/theme';
+import {
+  createSession,
+  touchSession,
+  saveMessage,
+  loadSessionMessages,
+  getOpenEndedSessions,
+  SessionSummary,
+} from '../../src/db/chatHistory';
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 type ConvPhase = 'listening' | 'transcribing' | 'generating' | 'speaking';
@@ -58,6 +68,11 @@ function buildPinnedContext(dream: Dream): string {
   ].filter(Boolean).join('\n');
 }
 
+function formatSessionDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 const SILENCE_DB = -40;
 const SILENCE_AFTER_SPEECH_MS = 1200;
 
@@ -72,6 +87,10 @@ export default function ChatScreen() {
     appendStreamToken,
     finalizeStream,
     setIsGenerating,
+    clearMessages,
+    currentSessionId,
+    setCurrentSessionId,
+    setMessages,
   } = useChatStore();
 
   const [inputText, setInputText] = useState('');
@@ -80,20 +99,96 @@ export default function ChatScreen() {
   const [isConversing, setIsConversing] = useState(false);
   const [convPhase, setConvPhase] = useState<ConvPhase>('listening');
   const [focusDream, setFocusDream] = useState<Dream | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [openSessions, setOpenSessions] = useState<SessionSummary[]>([]);
 
-  const { dreamId: dreamIdParam } = useLocalSearchParams<{ dreamId?: string }>();
+  const { dreamId: dreamIdParam, sessionId: sessionIdParam } = useLocalSearchParams<{
+    dreamId?: string;
+    sessionId?: string;
+  }>();
+
+  const navigation = useNavigation();
+  const currentSessionIdRef = useRef<number | null>(currentSessionId);
+
+  // Keep ref in sync with store
   useEffect(() => {
-    if (!dreamIdParam) { setFocusDream(null); return; }
-    getDatabase()
-      .select().from(dreams).where(eq(dreams.id, parseInt(dreamIdParam, 10)))
-      .then(([row]) => { if (row) setFocusDream(row); })
-      .catch(() => {});
-  }, [dreamIdParam]);
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
 
-  const pinnedContext = useMemo(
-    () => (focusDream ? buildPinnedContext(focusDream) : undefined),
-    [focusDream],
-  );
+  // Update header right whenever focusDream changes
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={styles.headerButtons}>
+          {!focusDream && (
+            <Pressable onPress={() => setShowHistory(true)} hitSlop={8}>
+              <Text style={styles.headerIcon}>🕐</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={() => router.push('/settings')} hitSlop={8}>
+            <Text style={styles.headerIcon}>⚙️</Text>
+          </Pressable>
+        </View>
+      ),
+    });
+  }, [navigation, focusDream]);
+
+  // Load open-ended sessions when history sheet opens
+  useEffect(() => {
+    if (showHistory) {
+      getOpenEndedSessions().then(setOpenSessions).catch(() => {});
+    }
+  }, [showHistory]);
+
+  // Handle session/dream params from navigation
+  useEffect(() => {
+    if (!sessionIdParam && !dreamIdParam) return;
+
+    (async () => {
+      clearMessages();
+      setCurrentSessionId(null);
+      currentSessionIdRef.current = null;
+      setFocusDream(null);
+
+      if (sessionIdParam) {
+        const sessionId = parseInt(sessionIdParam, 10);
+        try {
+          const [session] = await getDatabase()
+            .select()
+            .from(chatSessions)
+            .where(eq(chatSessions.id, sessionId));
+          if (!session) return;
+
+          const msgs = await loadSessionMessages(sessionId);
+          setMessages(msgs);
+          setCurrentSessionId(sessionId);
+          currentSessionIdRef.current = sessionId;
+
+          if (session.dreamId) {
+            const [dream] = await getDatabase()
+              .select()
+              .from(dreams)
+              .where(eq(dreams.id, session.dreamId));
+            if (dream) setFocusDream(dream);
+          }
+        } catch {
+          // session load failed; start fresh
+        }
+      } else if (dreamIdParam) {
+        const dreamId = parseInt(dreamIdParam, 10);
+        const [dream] = await getDatabase()
+          .select()
+          .from(dreams)
+          .where(eq(dreams.id, dreamId))
+          .catch(() => []);
+        if (dream) setFocusDream(dream);
+
+        const sid = await createSession(dreamId);
+        setCurrentSessionId(sid);
+        currentSessionIdRef.current = sid;
+      }
+    })();
+  }, [sessionIdParam, dreamIdParam]);
 
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
@@ -111,9 +206,49 @@ export default function ChatScreen() {
     };
   }, []);
 
+  const pinnedContext = useMemo(
+    () => (focusDream ? buildPinnedContext(focusDream) : undefined),
+    [focusDream],
+  );
+
   const scrollToBottom = useCallback(() => {
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, []);
+
+  // ─── History sheet actions ─────────────────────────────────────────────────
+
+  const handleLoadSession = async (sessionId: number) => {
+    setShowHistory(false);
+    clearMessages();
+    setCurrentSessionId(null);
+    currentSessionIdRef.current = null;
+    setFocusDream(null);
+
+    const msgs = await loadSessionMessages(sessionId);
+    setMessages(msgs);
+    setCurrentSessionId(sessionId);
+    currentSessionIdRef.current = sessionId;
+  };
+
+  const handleNewChat = () => {
+    setShowHistory(false);
+    clearMessages();
+    setCurrentSessionId(null);
+    currentSessionIdRef.current = null;
+    setFocusDream(null);
+  };
+
+  // ─── Ensure session exists, returns session id ─────────────────────────────
+
+  const ensureSession = async (): Promise<number> => {
+    let sid = currentSessionIdRef.current;
+    if (sid === null) {
+      sid = await createSession();
+      setCurrentSessionId(sid);
+      currentSessionIdRef.current = sid;
+    }
+    return sid;
+  };
 
   // ─── Manual send ──────────────────────────────────────────────────────────
 
@@ -122,6 +257,10 @@ export default function ChatScreen() {
     if (!text || isGenerating || voiceState !== 'idle' || isConversing) return;
 
     setInputText('');
+
+    const sid = await ensureSession();
+    await saveMessage(sid, 'user', text).catch(() => {});
+
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: Date.now() };
     addMessage(userMsg);
     setIsGenerating(true);
@@ -132,7 +271,15 @@ export default function ChatScreen() {
         text,
         messages,
         (token) => { appendStreamToken(token); scrollToBottom(); },
-        (response) => { finalizeStream(response); scrollToBottom(); },
+        (response) => {
+          finalizeStream(response);
+          scrollToBottom();
+          const s = currentSessionIdRef.current;
+          if (s !== null) {
+            saveMessage(s, 'assistant', response).catch(() => {});
+            touchSession(s).catch(() => {});
+          }
+        },
         pinnedContext,
       );
     } catch {
@@ -218,25 +365,38 @@ export default function ChatScreen() {
       }).catch(() => resolve(null));
     });
 
-  const generateResponse = (text: string): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const history = useChatStore.getState().messages;
-      const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: Date.now() };
-      addMessage(userMsg);
-      setIsGenerating(true);
-      setConvPhase('generating');
-      setVoiceState('idle');
-      setInputText('');
-      scrollToBottom();
+  const generateResponse = async (text: string): Promise<string> => {
+    const sid = await ensureSession();
+    await saveMessage(sid, 'user', text).catch(() => {});
 
+    const history = useChatStore.getState().messages;
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text, timestamp: Date.now() };
+    addMessage(userMsg);
+    setIsGenerating(true);
+    setConvPhase('generating');
+    setVoiceState('idle');
+    setInputText('');
+    scrollToBottom();
+
+    return new Promise((resolve, reject) => {
       sendChatMessage(
         text,
         history,
         (token) => { appendStreamToken(token); scrollToBottom(); },
-        (response) => { finalizeStream(response); scrollToBottom(); resolve(response); },
+        (response) => {
+          finalizeStream(response);
+          scrollToBottom();
+          const s = currentSessionIdRef.current;
+          if (s !== null) {
+            saveMessage(s, 'assistant', response).catch(() => {});
+            touchSession(s).catch(() => {});
+          }
+          resolve(response);
+        },
         pinnedContext,
       ).catch(reject);
     });
+  };
 
   const speakAndWait = (text: string): Promise<void> =>
     new Promise((resolve) => {
@@ -436,6 +596,44 @@ export default function ChatScreen() {
           </>
         )}
       </View>
+
+      {/* History bottom sheet */}
+      <Modal
+        visible={showHistory}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowHistory(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowHistory(false)}>
+          <View style={styles.bottomSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Chat History</Text>
+
+            <Pressable style={styles.newChatRow} onPress={handleNewChat}>
+              <Text style={styles.newChatText}>+ New Chat</Text>
+            </Pressable>
+
+            {openSessions.length === 0 ? (
+              <Text style={styles.sheetEmpty}>No previous chats</Text>
+            ) : (
+              <ScrollView style={styles.sheetScroll} bounces={false}>
+                {openSessions.map((s) => (
+                  <Pressable
+                    key={s.id}
+                    style={styles.sessionRow}
+                    onPress={() => handleLoadSession(s.id)}
+                  >
+                    <Text style={styles.sessionDate}>{formatSessionDate(s.updatedAt)}</Text>
+                    <Text style={styles.sessionPreview} numberOfLines={1}>
+                      {s.preview || 'Chat session'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -457,6 +655,17 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     flexGrow: 1,
+  },
+
+  // Header
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginRight: 18,
+  },
+  headerIcon: {
+    fontSize: 18,
   },
 
   // Empty state
@@ -669,5 +878,74 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontFamily: FONTS.bodyBold,
+  },
+
+  // History modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    backgroundColor: COLORS.surfaceHigh,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    maxHeight: '70%',
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    color: COLORS.textBright,
+    fontFamily: FONTS.cinzel,
+    fontSize: 14,
+    letterSpacing: 0.8,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  newChatRow: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  newChatText: {
+    color: COLORS.lavender,
+    fontFamily: FONTS.bodySemi,
+    fontSize: 15,
+  },
+  sheetEmpty: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    textAlign: 'center',
+    paddingVertical: 24,
+  },
+  sheetScroll: {
+    flexGrow: 0,
+  },
+  sessionRow: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  sessionDate: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.bodyMed,
+    fontSize: 11,
+    marginBottom: 3,
+  },
+  sessionPreview: {
+    color: COLORS.textMid,
+    fontFamily: FONTS.body,
+    fontSize: 14,
   },
 });
