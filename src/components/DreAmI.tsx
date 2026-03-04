@@ -14,9 +14,9 @@ interface DreAmIProps {
 export function DreAmI({ size = 24, style }: DreAmIProps) {
   return (
     <Text style={[{ fontSize: size }, style]}>
-      <Text style={{ fontFamily: FONTS.body, color: COLORS.textMid }}>dre</Text>
+      <Text style={{ fontFamily: FONTS.body, color: COLORS.amber }}>dre</Text>
       <Text style={{ fontFamily: FONTS.cinzel, color: COLORS.lavender }}>A</Text>
-      <Text style={{ fontFamily: FONTS.body, color: COLORS.textMid }}>m</Text>
+      <Text style={{ fontFamily: FONTS.body, color: COLORS.amber }}>m</Text>
       <Text style={{ fontFamily: FONTS.cinzel, color: COLORS.teal }}>I</Text>
     </Text>
   );

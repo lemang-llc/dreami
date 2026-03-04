@@ -23,9 +23,9 @@ function GlowText() {
 
   return (
     <Text style={{ fontSize: LOGO_SIZE }}>
-      <Text style={[{ fontFamily: FONTS.body,   color: COLORS.textMid    }, shadow(COLORS.lavender)]}>dre</Text>
+      <Text style={[{ fontFamily: FONTS.body,   color: COLORS.amber      }, shadow(COLORS.amber)   ]}>dre</Text>
       <Text style={[{ fontFamily: FONTS.cinzel, color: COLORS.lavender   }, shadow(COLORS.lavender)]}>A</Text>
-      <Text style={[{ fontFamily: FONTS.body,   color: COLORS.textMid    }, shadow(COLORS.lavender)]}>m</Text>
+      <Text style={[{ fontFamily: FONTS.body,   color: COLORS.amber      }, shadow(COLORS.amber)   ]}>m</Text>
       <Text style={[{ fontFamily: FONTS.cinzel, color: COLORS.teal       }, shadow(COLORS.teal)    ]}>I</Text>
     </Text>
   );

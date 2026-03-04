@@ -62,7 +62,16 @@ export async function summarizeDream(
     }
   );
 
-  return parseSummaryJson(result.text);
+  // llama.rn echoes the full prompt in result.text — extract only the
+  // generated portion (same pattern used in chat.ts).
+  const AST_HEADER = '<|start_header_id|>assistant<|end_header_id|>\n\n';
+  const STOP_RE    = /<\|eot_id\|>|<\|end_of_text\|>/g;
+  const generated  = result.text.includes(AST_HEADER)
+    ? result.text.slice(result.text.lastIndexOf(AST_HEADER) + AST_HEADER.length)
+    : result.text;
+  const clean = generated.replace(STOP_RE, '').trim();
+
+  return parseSummaryJson(clean);
 }
 
 function parseSummaryJson(text: string): DreamSummary {
