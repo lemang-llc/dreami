@@ -65,7 +65,7 @@ export async function queryDreams(
   return ftsSearch(question, topK);
 }
 
-async function ftsSearch(
+export async function ftsSearch(
   question: string,
   topK: number,
 ): Promise<RetrievedChunk[]> {

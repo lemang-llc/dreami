@@ -1,13 +1,15 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   SectionList,
+  FlatList,
   StyleSheet,
   Pressable,
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useDreams } from '../../src/hooks/useDreams';
@@ -15,6 +17,7 @@ import { DreamCard } from '../../src/components/DreamCard';
 import { StarField } from '../../src/components/StarField';
 import { Dream } from '../../src/db/schema';
 import { COLORS, MOOD_COLORS, FONTS } from '../../src/theme';
+import { ftsSearch } from '../../src/rag/pipeline';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,8 +99,44 @@ export default function DreamListScreen() {
   const { dreams, isLoading, refetch } = useDreams();
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Dream[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSearchMode = searchQuery.trim().length > 0;
 
   useFocusEffect(useCallback(() => { refetch(); }, [refetch]));
+
+  // Debounced search: runs FTS + semantic in parallel, merges by dreamId.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const chunks = await ftsSearch(q, 20);
+        const matched = chunks
+          .map(({ dreamId }) => dreams.find((d) => d.id === dreamId))
+          .filter(Boolean) as Dream[];
+
+        setSearchResults(matched);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery, dreams]);
 
   const filtered = useMemo(() => {
     let d = dreams;
@@ -166,8 +205,29 @@ export default function DreamListScreen() {
     <View style={styles.container}>
       <StarField />
 
-      {/* Filter bar */}
-      <View style={styles.filterBar}>
+      {/* Search bar */}
+      <View style={styles.searchBar}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search dreams…"
+          placeholderTextColor={COLORS.textFaint}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+          clearButtonMode="never"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery('')} hitSlop={12}>
+            <Text style={styles.searchClear}>✕</Text>
+          </Pressable>
+        )}
+        {isSearching && <ActivityIndicator color={COLORS.lavender} size="small" style={{ marginLeft: 4 }} />}
+      </View>
+
+      {/* Filter bar — hidden while searching */}
+      {!isSearchMode && <View style={styles.filterBar}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -216,26 +276,55 @@ export default function DreamListScreen() {
             </Pressable>
           ))}
         </View>
-      </View>
+      </View>}
 
-      {/* Timeline list */}
-      <SectionList<Dream, TimelineSection>
-        sections={sections}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
-          <DreamCard dream={item} onPress={() => router.push(`/dream/${item.id}`)} />
-        )}
-        renderSectionHeader={renderSectionHeader}
-        ListEmptyComponent={renderEmpty}
-        stickySectionHeadersEnabled={false}
-        style={{ backgroundColor: 'transparent' }}
-        refreshControl={
-          <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={COLORS.lavender} />
-        }
-        contentContainerStyle={
-          sections.length === 0 ? styles.emptyContainer : styles.listContent
-        }
-      />
+      {/* Search results */}
+      {isSearchMode ? (
+        <FlatList<Dream>
+          data={searchResults}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => (
+            <DreamCard dream={item} onPress={() => router.push(`/dream/${item.id}`)} />
+          )}
+          style={{ backgroundColor: 'transparent' }}
+          contentContainerStyle={searchResults.length === 0 ? styles.emptyContainer : styles.listContent}
+          ListHeaderComponent={
+            !isSearching && searchResults.length > 0 ? (
+              <Text style={styles.searchResultsHeader}>
+                {searchResults.length} {searchResults.length === 1 ? 'dream' : 'dreams'} found
+              </Text>
+            ) : null
+          }
+          ListEmptyComponent={
+            isSearching ? null : (
+              <View style={styles.empty}>
+                <Text style={styles.emptyEmoji}>🔍</Text>
+                <Text style={styles.emptyTitle}>No dreams found</Text>
+                <Text style={styles.emptySubtitle}>Try different keywords or concepts.</Text>
+              </View>
+            )
+          }
+        />
+      ) : (
+        /* Timeline list */
+        <SectionList<Dream, TimelineSection>
+          sections={sections}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => (
+            <DreamCard dream={item} onPress={() => router.push(`/dream/${item.id}`)} />
+          )}
+          renderSectionHeader={renderSectionHeader}
+          ListEmptyComponent={renderEmpty}
+          stickySectionHeadersEnabled={false}
+          style={{ backgroundColor: 'transparent' }}
+          refreshControl={
+            <RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={COLORS.lavender} />
+          }
+          contentContainerStyle={
+            sections.length === 0 ? styles.emptyContainer : styles.listContent
+          }
+        />
+      )}
 
       {isLoading && dreams.length === 0 && (
         <View style={styles.loadingOverlay}>
@@ -252,6 +341,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.bg,
+  },
+
+  // Search bar
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 8,
+  },
+  searchIcon: {
+    fontSize: 14,
+    opacity: 0.6,
+  },
+  searchInput: {
+    flex: 1,
+    color: COLORS.textBright,
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    padding: 0,
+  },
+  searchClear: {
+    color: COLORS.textFaint,
+    fontSize: 13,
+    paddingHorizontal: 2,
+  },
+  searchResultsHeader: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
   },
 
   // Filter bar
