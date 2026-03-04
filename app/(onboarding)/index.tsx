@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useModelStatus } from '../../src/hooks/useModelStatus';
 import { ModelDownloadCard } from '../../src/components/ModelDownloadCard';
 import { StarField } from '../../src/components/StarField';
@@ -42,6 +43,17 @@ export default function OnboardingScreen() {
     });
     return () => sub.remove();
   }, [checkDownloaded, resumeInterruptedDownloads]);
+
+  // Keep the screen on during model downloads — these take several minutes
+  // and a sleep-triggered pause could corrupt in-progress transfers.
+  useEffect(() => {
+    if (downloading) {
+      activateKeepAwakeAsync('download');
+    } else {
+      deactivateKeepAwake('download');
+    }
+    return () => deactivateKeepAwake('download');
+  }, [downloading]);
 
   const handleDownload = async () => {
     setDownloading(true);

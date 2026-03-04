@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useRecorder } from '../../src/hooks/useRecorder';
 import { useTranscription } from '../../src/hooks/useTranscription';
 import { Waveform } from '../../src/components/Waveform';
@@ -24,6 +25,16 @@ export default function RecordScreen() {
   const { transcribe, isTranscribing, progress, transcript, setTranscript } = useTranscription();
   const store = useDreamStore();
   const [isSaving, setIsSaving] = useState(false);
+
+  // Keep the screen on while recording so the mic isn't cut short.
+  useEffect(() => {
+    if (isRecording) {
+      activateKeepAwakeAsync('recording');
+    } else {
+      deactivateKeepAwake('recording');
+    }
+    return () => deactivateKeepAwake('recording');
+  }, [isRecording]);
 
   const handleStartRecording = async () => {
     const granted = await start();
