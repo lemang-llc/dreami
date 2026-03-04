@@ -457,7 +457,12 @@ export default function ChatScreen() {
 
   const stopConversation = async () => {
     isConversingRef.current = false;
+    // Reset UI state synchronously before the re-render that reveals the normal
+    // input row; otherwise voiceState='recording' makes the TextInput non-editable
+    // and the mic button show ⏹, leading to a failed stopRecording() call.
     setIsConversing(false);
+    setVoiceState('idle');
+    setInputText('');
     deactivateKeepAwake();
     if (vadIntervalRef.current) { clearInterval(vadIntervalRef.current); vadIntervalRef.current = null; }
     await stopSpeaking();
