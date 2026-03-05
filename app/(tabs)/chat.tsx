@@ -13,6 +13,7 @@ import {
   Modal,
   ScrollView,
   Animated,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useNavigation, router } from 'expo-router';
 import { useChatStore } from '../../src/stores/chatStore';
@@ -77,6 +78,23 @@ function formatSessionDate(dateStr: string): string {
 
 // Minimum dBFS to count as speech. -40 picks up ambient noise; -28 requires
 // clearly audible voice (normal speech: -20 to -5 dBFS).
+// ─── NUX step definitions ─────────────────────────────────────────────────────
+
+const NUX_STEPS = [
+  {
+    title: 'Hands-free voice chat',
+    body: 'Tap 🎧 to start a back-and-forth voice conversation — dreAmI listens and speaks back automatically.',
+  },
+  {
+    title: 'Dictate your message',
+    body: 'Tap 🎙 to record. Tap ⏹ when you\'re done — your words are transcribed into the text box for you to review.',
+  },
+  {
+    title: 'Type & send',
+    body: 'Or just type your question and tap ↑ to send.',
+  },
+];
+
 const SILENCE_DB = -28;
 const SILENCE_AFTER_SPEECH_MS = 1200;
 // How long audio must stay above SILENCE_DB before we consider it "speech".
@@ -108,7 +126,8 @@ export default function ChatScreen() {
   const [focusDream, setFocusDream] = useState<Dream | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [openSessions, setOpenSessions] = useState<SessionSummary[]>([]);
-  const [showNux, setShowNux] = useState(false);
+  const [nuxStep, setNuxStep] = useState<number | null>(null);
+  const [inputRowH, setInputRowH] = useState(0);
   const nuxFade = useRef(new Animated.Value(0)).current;
 
   const { dreamId: dreamIdParam, sessionId: sessionIdParam } = useLocalSearchParams<{
@@ -157,29 +176,35 @@ export default function ChatScreen() {
       .where(eq(appSettings.key, SETTINGS_KEYS.CHAT_NUX_SEEN))
       .then((rows) => {
         if (!rows.length) {
-          setShowNux(true);
-          Animated.timing(nuxFade, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }).start();
+          setNuxStep(0);
+          Animated.timing(nuxFade, { toValue: 1, duration: 400, useNativeDriver: true }).start();
         }
       })
       .catch(() => {});
   }, []);
 
   const dismissNux = () => {
-    Animated.timing(nuxFade, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => setShowNux(false));
+    Animated.timing(nuxFade, { toValue: 0, duration: 200, useNativeDriver: true }).start(() =>
+      setNuxStep(null),
+    );
     getSqliteDb()
       ?.runAsync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', [
         SETTINGS_KEYS.CHAT_NUX_SEEN,
         'true',
       ])
       .catch(() => {});
+  };
+
+  const advanceNux = () => {
+    if (nuxStep === null) return;
+    if (nuxStep < NUX_STEPS.length - 1) {
+      Animated.timing(nuxFade, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
+        setNuxStep((s) => (s ?? 0) + 1);
+        Animated.timing(nuxFade, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+      });
+    } else {
+      dismissNux();
+    }
   };
 
   // Handle session/dream params from navigation
@@ -594,47 +619,58 @@ export default function ChatScreen() {
         onContentSizeChange={scrollToBottom}
       />
 
-      {/* First-time guidance bubbles */}
-      {showNux && !isConversing && (
-        <Animated.View style={[styles.nuxContainer, { opacity: nuxFade }]}>
-          <View style={styles.nuxHeader}>
-            <Text style={styles.nuxLabel}>HOW TO CHAT</Text>
-            <Pressable onPress={dismissNux} hitSlop={10}>
-              <Text style={styles.nuxGotIt}>Got it ›</Text>
-            </Pressable>
-          </View>
-          <View style={styles.nuxRow}>
-            {/* Above 🎧 — left-aligned so bubble doesn't bleed off-screen */}
-            <View style={styles.nuxColLeft}>
-              <View style={styles.nuxBubble}>
-                <Text style={styles.nuxBubbleTitle}>Voice chat</Text>
-                <Text style={styles.nuxBubbleBody}>Hands-free{'\n'}conversation</Text>
-              </View>
-              <View style={[styles.nuxTail, styles.nuxTailLeft]} />
-            </View>
+      <View onLayout={(e) => setInputRowH(e.nativeEvent.layout.height)}>
+        {/* Floating NUX bubble — absolutely positioned, one step at a time */}
+        {nuxStep !== null && !isConversing && inputRowH > 0 && (() => {
+          const screenW = Dimensions.get('window').width;
+          const BUBBLE_W = 210;
+          // Centre x of each button on screen (matches input-row StyleSheet values)
+          const btnCX = [
+            12 + 21,                          // 🎧 convBtn
+            screenW - 12 - 8 - 42 - 21,       // 🎙 micBtn
+            screenW - 12 - 21,                // ↑ sendBtn
+          ][nuxStep];
+          // Clamp bubble left so it stays ≥ 8 px from both edges
+          const bubbleLeft = Math.max(8, Math.min(btnCX - BUBBLE_W / 2, screenW - BUBBLE_W - 8));
+          // Tail left within the bubble container so it points at the button
+          const tailLeft = Math.max(6, Math.min(btnCX - bubbleLeft - 6, BUBBLE_W - 18));
+          const step = NUX_STEPS[nuxStep];
+          const isLast = nuxStep === NUX_STEPS.length - 1;
 
-            {/* Flex spacer — mirrors the TextInput */}
-            <View style={{ flex: 1 }} />
-
-            {/* Above 🎙 — centred over the button */}
-            <View style={styles.nuxColCenter}>
+          return (
+            <Animated.View
+              pointerEvents="box-none"
+              style={{
+                position: 'absolute',
+                bottom: inputRowH + 4,
+                left: bubbleLeft,
+                width: BUBBLE_W,
+                opacity: nuxFade,
+                zIndex: 20,
+              }}
+            >
               <View style={styles.nuxBubble}>
-                <Text style={styles.nuxBubbleTitle}>Dictate</Text>
-                <Text style={styles.nuxBubbleBody}>Voice to text</Text>
+                <Text style={styles.nuxBubbleTitle}>{step.title}</Text>
+                <Text style={styles.nuxBubbleBody}>{step.body}</Text>
+                <View style={styles.nuxBubbleFooter}>
+                  <View style={styles.nuxDots}>
+                    {NUX_STEPS.map((_, i) => (
+                      <View
+                        key={i}
+                        style={[styles.nuxDot, i === nuxStep && styles.nuxDotActive]}
+                      />
+                    ))}
+                  </View>
+                  <Pressable onPress={isLast ? dismissNux : advanceNux} hitSlop={10}>
+                    <Text style={styles.nuxNext}>{isLast ? 'Done ✓' : 'Next ›'}</Text>
+                  </Pressable>
+                </View>
               </View>
-              <View style={styles.nuxTail} />
-            </View>
-
-            {/* Above ↑ — right-aligned so bubble doesn't bleed off-screen */}
-            <View style={styles.nuxColRight}>
-              <View style={styles.nuxBubble}>
-                <Text style={styles.nuxBubbleTitle}>Send</Text>
-              </View>
-              <View style={[styles.nuxTail, styles.nuxTailRight]} />
-            </View>
-          </View>
-        </Animated.View>
-      )}
+              {/* Triangle tail pointing down at the icon */}
+              <View style={[styles.nuxTail, { marginLeft: tailLeft }]} />
+            </Animated.View>
+          );
+        })()}
 
       <View style={styles.inputRow}>
         {isConversing ? (
@@ -697,6 +733,7 @@ export default function ChatScreen() {
           </>
         )}
       </View>
+      </View>{/* /onLayout wrapper */}
 
       {/* History bottom sheet */}
       <Modal
@@ -983,103 +1020,66 @@ const styles = StyleSheet.create({
 
   // ─── NUX ──────────────────────────────────────────────────────────────────
 
-  nuxContainer: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 10,
-    paddingBottom: 6,
-    paddingHorizontal: 12,
-  },
-  nuxHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  nuxLabel: {
-    color: COLORS.lavenderMid,
-    fontFamily: FONTS.cinzel,
-    fontSize: 9,
-    letterSpacing: 1.2,
-  },
-  nuxGotIt: {
-    color: COLORS.lavender,
-    fontFamily: FONTS.bodySemi,
-    fontSize: 13,
-  },
-  // The NUX row replicates the input row's flex layout so each column sits
-  // directly above its corresponding button.
-  nuxRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    paddingBottom: 2,
-  },
-  // Left column (above 🎧): left-align the bubble so it doesn't clip off-screen
-  nuxColLeft: {
-    width: 42,
-    alignItems: 'flex-start',
-  },
-  // Centre column (above 🎙): bubble naturally overflows symmetrically
-  nuxColCenter: {
-    width: 42,
-    alignItems: 'center',
-  },
-  // Right column (above ↑): right-align so bubble doesn't clip off-screen
-  nuxColRight: {
-    width: 42,
-    alignItems: 'flex-end',
-  },
   nuxBubble: {
     backgroundColor: COLORS.surface,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.lavender + '40',
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    // Soft glow matching the lavender palette
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     shadowColor: COLORS.lavender,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 6,
   },
   nuxBubbleTitle: {
     color: COLORS.textBright,
     fontFamily: FONTS.bodySemi,
-    fontSize: 11,
-    textAlign: 'center',
+    fontSize: 14,
+    marginBottom: 6,
   },
   nuxBubbleBody: {
-    color: COLORS.textDim,
+    color: COLORS.textMid,
     fontFamily: FONTS.body,
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 2,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  nuxBubbleFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  nuxDots: {
+    flexDirection: 'row',
+    gap: 5,
+    alignItems: 'center',
+  },
+  nuxDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.border,
+  },
+  nuxDotActive: {
+    backgroundColor: COLORS.lavender,
+  },
+  nuxNext: {
+    color: COLORS.lavender,
+    fontFamily: FONTS.bodySemi,
+    fontSize: 14,
   },
   // Downward-pointing triangle tail (matches bubble background)
   nuxTail: {
     width: 0,
     height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 7,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderTopWidth: 8,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
     borderTopColor: COLORS.surface,
-    alignSelf: 'center',
-  },
-  // Left-column tail: offset to centre over the 42 px button
-  nuxTailLeft: {
-    alignSelf: 'auto',
-    marginLeft: 15,
-  },
-  // Right-column tail: mirror of left
-  nuxTailRight: {
-    alignSelf: 'auto',
-    marginRight: 15,
   },
 
   // History modal
