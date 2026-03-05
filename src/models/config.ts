@@ -59,4 +59,6 @@ export const SETTINGS_KEYS = {
   DOWNLOAD_PENDING_EMBED: 'dl_pending_embed',
   DOWNLOAD_PENDING_WHISPER: 'dl_pending_whisper',
   CHAT_NUX_SEEN: 'chat_nux_seen',
+  TTS_VOICE_ID: 'tts_voice_id',
+  TTS_VOICE_RATE: 'tts_voice_rate',
 } as const;

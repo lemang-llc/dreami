@@ -9,16 +9,29 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import * as Speech from 'expo-speech';
 import {
   loadNotificationSettings,
   saveNotificationSettings,
 } from '../src/notifications/scheduler';
 import { NotificationTimePicker } from '../src/components/NotificationTimePicker';
 import { getModelsDirSize, getRecordingFiles, deleteFile, formatBytes } from '../src/utils/fileSystem';
-import { MODEL_SIZES } from '../src/models/config';
+import { MODEL_SIZES, SETTINGS_KEYS } from '../src/models/config';
 import { StarField } from '../src/components/StarField';
 import { DreAmI } from '../src/components/DreAmI';
 import { COLORS, FONTS } from '../src/theme';
+import { getSqliteDb } from '../src/db/client';
+import { setTtsVoice, setTtsRate } from '../src/audio/tts';
+import type { Voice as SpeechVoice } from 'expo-speech';
+
+const RATE_PRESETS = [
+  { label: '0.6×', rate: 0.6 },
+  { label: '0.75×', rate: 0.75 },
+  { label: '0.9×', rate: 0.9 },
+  { label: '1.0×', rate: 1.0 },
+  { label: '1.15×', rate: 1.15 },
+];
+const DEFAULT_RATE = 0.9;
 
 export default function SettingsScreen() {
   const [notifEnabled, setNotifEnabled] = useState(true);
@@ -27,6 +40,9 @@ export default function SettingsScreen() {
   const [modelsDirSize, setModelsDirSize] = useState(0);
   const [recordingsSize, setRecordingsSize] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [voices, setVoices] = useState<SpeechVoice[]>([]);
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null);
+  const [voiceRate, setVoiceRate] = useState(DEFAULT_RATE);
 
   useEffect(() => {
     async function load() {
@@ -47,10 +63,97 @@ export default function SettingsScreen() {
         rSize += await getFileSize(f);
       }
       setRecordingsSize(rSize);
+
+      // Load available TTS voices (English only, Enhanced before Default then name)
+      const allVoices = await Speech.getAvailableVoicesAsync();
+      const enVoices = allVoices
+        .filter((v) => v.language.startsWith('en'))
+        .sort((a, b) => {
+          const qa = a.quality === 'Enhanced' ? 1 : 0;
+          const qb = b.quality === 'Enhanced' ? 1 : 0;
+          return qb - qa || a.name.localeCompare(b.name);
+        });
+      setVoices(enVoices);
+
+      // Load saved voice preferences
+      const sqlite = getSqliteDb();
+      if (sqlite) {
+        const voiceRow = await sqlite
+          .getFirstAsync<{ value: string }>(
+            'SELECT value FROM app_settings WHERE key = ?',
+            [SETTINGS_KEYS.TTS_VOICE_ID],
+          )
+          .catch(() => null);
+        setSelectedVoiceId(voiceRow?.value ?? null);
+
+        const rateRow = await sqlite
+          .getFirstAsync<{ value: string }>(
+            'SELECT value FROM app_settings WHERE key = ?',
+            [SETTINGS_KEYS.TTS_VOICE_RATE],
+          )
+          .catch(() => null);
+        if (rateRow) setVoiceRate(parseFloat(rateRow.value));
+      }
+
       setIsLoading(false);
     }
     load();
   }, []);
+
+  const handleSelectVoice = async (voice: SpeechVoice) => {
+    const newId = selectedVoiceId === voice.identifier ? null : voice.identifier;
+    setSelectedVoiceId(newId);
+    setTtsVoice(newId);
+
+    const sqlite = getSqliteDb();
+    if (sqlite) {
+      if (newId) {
+        await sqlite
+          .runAsync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', [
+            SETTINGS_KEYS.TTS_VOICE_ID,
+            newId,
+          ])
+          .catch(() => {});
+      } else {
+        await sqlite
+          .runAsync('DELETE FROM app_settings WHERE key = ?', [SETTINGS_KEYS.TTS_VOICE_ID])
+          .catch(() => {});
+      }
+    }
+
+    if (newId) {
+      Speech.stop();
+      Speech.speak('Sweet dreams are made of this.', {
+        voice: newId,
+        language: voice.language,
+        rate: voiceRate,
+        pitch: 1.0,
+      });
+    }
+  };
+
+  const handleSelectRate = async (rate: number) => {
+    setVoiceRate(rate);
+    setTtsRate(rate);
+
+    const sqlite = getSqliteDb();
+    if (sqlite) {
+      await sqlite
+        .runAsync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', [
+          SETTINGS_KEYS.TTS_VOICE_RATE,
+          String(rate),
+        ])
+        .catch(() => {});
+    }
+
+    Speech.stop();
+    Speech.speak('Sweet dreams are made of this.', {
+      voice: selectedVoiceId ?? undefined,
+      language: 'en-US',
+      rate,
+      pitch: 1.0,
+    });
+  };
 
   const handleNotifToggle = async (enabled: boolean) => {
     setNotifEnabled(enabled);
@@ -103,9 +206,7 @@ export default function SettingsScreen() {
           <View style={styles.row}>
             <View style={styles.rowInfo}>
               <Text style={styles.rowLabel}>Daily Reminder</Text>
-              <Text style={styles.rowSub}>
-                Get reminded to record your dreams
-              </Text>
+              <Text style={styles.rowSub}>Get reminded to record your dreams</Text>
             </View>
             <Switch
               value={notifEnabled}
@@ -130,6 +231,60 @@ export default function SettingsScreen() {
           )}
         </View>
 
+        {/* Voice */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>AI Voice</Text>
+
+          {/* Speed presets */}
+          <Text style={styles.speedLabel}>Speed</Text>
+          <View style={styles.presetRow}>
+            {RATE_PRESETS.map((p) => (
+              <Pressable
+                key={p.rate}
+                style={[styles.presetBtn, voiceRate === p.rate && styles.presetBtnActive]}
+                onPress={() => handleSelectRate(p.rate)}
+              >
+                <Text style={[styles.presetBtnText, voiceRate === p.rate && styles.presetBtnTextActive]}>
+                  {p.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Voice list */}
+          <Text style={styles.voiceHint}>
+            Tap a voice to select it and hear a preview. Tap again to revert to the system default.
+          </Text>
+          {voices.length === 0 ? (
+            <Text style={styles.voiceEmpty}>No voices found on this device.</Text>
+          ) : (
+            voices.map((v) => {
+              const isSelected = selectedVoiceId === v.identifier;
+              const isEnhanced = v.quality === 'Enhanced';
+              return (
+                <Pressable
+                  key={v.identifier}
+                  style={[styles.voiceRow, isSelected && styles.voiceRowSelected]}
+                  onPress={() => handleSelectVoice(v)}
+                >
+                  <View style={styles.voiceInfo}>
+                    <Text style={[styles.voiceName, isSelected && styles.voiceNameSelected]}>
+                      {v.name}
+                    </Text>
+                    <Text style={styles.voiceMeta}>{v.language}</Text>
+                  </View>
+                  {isSelected && <Text style={styles.voiceCheck}>✓</Text>}
+                  {isEnhanced && !isSelected && (
+                    <View style={styles.enhancedBadge}>
+                      <Text style={styles.enhancedBadgeText}>Enhanced</Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })
+          )}
+        </View>
+
         {/* Storage */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Storage</Text>
@@ -145,15 +300,9 @@ export default function SettingsScreen() {
           </View>
 
           <View style={styles.modelList}>
-            <Text style={styles.modelItem}>
-              · LLM: {formatBytes(MODEL_SIZES.llm)} (Llama 3.2 1B)
-            </Text>
-            <Text style={styles.modelItem}>
-              · Whisper: {formatBytes(MODEL_SIZES.whisper)}
-            </Text>
-            <Text style={styles.modelItem}>
-              · Embeddings: {formatBytes(MODEL_SIZES.embedding)}
-            </Text>
+            <Text style={styles.modelItem}>· LLM: {formatBytes(MODEL_SIZES.llm)} (Llama 3.2 1B)</Text>
+            <Text style={styles.modelItem}>· Whisper: {formatBytes(MODEL_SIZES.whisper)}</Text>
+            <Text style={styles.modelItem}>· Embeddings: {formatBytes(MODEL_SIZES.embedding)}</Text>
           </View>
 
           {recordingsSize > 0 && (
@@ -240,6 +389,109 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 12,
   },
+
+  // Speed presets
+  speedLabel: {
+    color: COLORS.textMid,
+    fontFamily: FONTS.bodyMed,
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 18,
+  },
+  presetBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  presetBtnActive: {
+    backgroundColor: COLORS.lavenderDeep,
+    borderColor: COLORS.lavender,
+  },
+  presetBtnText: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.bodyMed,
+    fontSize: 12,
+  },
+  presetBtnTextActive: {
+    color: '#fff',
+  },
+
+  // Voice selector
+  voiceHint: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 10,
+  },
+  voiceEmpty: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    paddingVertical: 12,
+  },
+  voiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  voiceRowSelected: {
+    borderColor: COLORS.lavender + '88',
+    backgroundColor: COLORS.lavenderDeep + '18',
+  },
+  voiceInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  voiceName: {
+    color: COLORS.textMid,
+    fontFamily: FONTS.bodyMed,
+    fontSize: 14,
+  },
+  voiceNameSelected: {
+    color: COLORS.textBright,
+  },
+  voiceMeta: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
+    fontSize: 11,
+  },
+  voiceCheck: {
+    color: COLORS.lavender,
+    fontFamily: FONTS.bodyBold,
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  enhancedBadge: {
+    backgroundColor: COLORS.lavenderDeep + '33',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: COLORS.lavender + '44',
+  },
+  enhancedBadgeText: {
+    color: COLORS.lavender,
+    fontFamily: FONTS.bodySemi,
+    fontSize: 10,
+  },
+
+  // Storage
   storageRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -282,6 +534,8 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyMed,
     fontSize: 14,
   },
+
+  // About
   aboutCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 14,

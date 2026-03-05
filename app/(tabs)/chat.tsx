@@ -273,6 +273,15 @@ export default function ChatScreen() {
     };
   }, []);
 
+  // Keep screen awake during voice conversation or while waiting for a response
+  useEffect(() => {
+    if (isConversing || isGenerating) {
+      activateKeepAwakeAsync().catch(() => {});
+    } else {
+      deactivateKeepAwake();
+    }
+  }, [isConversing, isGenerating]);
+
   const pinnedContext = useMemo(
     () => (focusDream ? buildPinnedContext(focusDream) : undefined),
     [focusDream],
@@ -513,7 +522,6 @@ export default function ChatScreen() {
     }
     isConversingRef.current = true;
     setIsConversing(true);
-    await activateKeepAwakeAsync();
     runConversationLoop();
   };
 
@@ -525,7 +533,6 @@ export default function ChatScreen() {
     setIsConversing(false);
     setVoiceState('idle');
     setInputText('');
-    deactivateKeepAwake();
     if (vadIntervalRef.current) { clearInterval(vadIntervalRef.current); vadIntervalRef.current = null; }
     await stopSpeaking();
     setSpeakingId(null);
