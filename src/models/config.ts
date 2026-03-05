@@ -58,4 +58,5 @@ export const SETTINGS_KEYS = {
   DOWNLOAD_PENDING_LLM: 'dl_pending_llm',
   DOWNLOAD_PENDING_EMBED: 'dl_pending_embed',
   DOWNLOAD_PENDING_WHISPER: 'dl_pending_whisper',
+  CHAT_NUX_SEEN: 'chat_nux_seen',
 } as const;

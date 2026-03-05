@@ -12,6 +12,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { useLocalSearchParams, useNavigation, router } from 'expo-router';
 import { useChatStore } from '../../src/stores/chatStore';
@@ -28,10 +29,11 @@ import {
 import { transcribeAudio } from '../../src/audio/transcriber';
 import { speakText, stopSpeaking } from '../../src/audio/tts';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { getDatabase } from '../../src/db/client';
-import { dreams, Dream, chatSessions } from '../../src/db/schema';
+import { getDatabase, getSqliteDb } from '../../src/db/client';
+import { dreams, Dream, chatSessions, appSettings } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { COLORS, FONTS } from '../../src/theme';
+import { SETTINGS_KEYS } from '../../src/models/config';
 import {
   createSession,
   touchSession,
@@ -106,6 +108,8 @@ export default function ChatScreen() {
   const [focusDream, setFocusDream] = useState<Dream | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [openSessions, setOpenSessions] = useState<SessionSummary[]>([]);
+  const [showNux, setShowNux] = useState(false);
+  const nuxFade = useRef(new Animated.Value(0)).current;
 
   const { dreamId: dreamIdParam, sessionId: sessionIdParam } = useLocalSearchParams<{
     dreamId?: string;
@@ -144,6 +148,39 @@ export default function ChatScreen() {
       getOpenEndedSessions().then(setOpenSessions).catch(() => {});
     }
   }, [showHistory]);
+
+  // Show NUX on first visit
+  useEffect(() => {
+    getDatabase()
+      .select()
+      .from(appSettings)
+      .where(eq(appSettings.key, SETTINGS_KEYS.CHAT_NUX_SEEN))
+      .then((rows) => {
+        if (!rows.length) {
+          setShowNux(true);
+          Animated.timing(nuxFade, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }).start();
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const dismissNux = () => {
+    Animated.timing(nuxFade, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => setShowNux(false));
+    getSqliteDb()
+      ?.runAsync('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)', [
+        SETTINGS_KEYS.CHAT_NUX_SEEN,
+        'true',
+      ])
+      .catch(() => {});
+  };
 
   // Handle session/dream params from navigation
   useEffect(() => {
@@ -557,6 +594,48 @@ export default function ChatScreen() {
         onContentSizeChange={scrollToBottom}
       />
 
+      {/* First-time guidance bubbles */}
+      {showNux && !isConversing && (
+        <Animated.View style={[styles.nuxContainer, { opacity: nuxFade }]}>
+          <View style={styles.nuxHeader}>
+            <Text style={styles.nuxLabel}>HOW TO CHAT</Text>
+            <Pressable onPress={dismissNux} hitSlop={10}>
+              <Text style={styles.nuxGotIt}>Got it ›</Text>
+            </Pressable>
+          </View>
+          <View style={styles.nuxRow}>
+            {/* Above 🎧 — left-aligned so bubble doesn't bleed off-screen */}
+            <View style={styles.nuxColLeft}>
+              <View style={styles.nuxBubble}>
+                <Text style={styles.nuxBubbleTitle}>Voice chat</Text>
+                <Text style={styles.nuxBubbleBody}>Hands-free{'\n'}conversation</Text>
+              </View>
+              <View style={[styles.nuxTail, styles.nuxTailLeft]} />
+            </View>
+
+            {/* Flex spacer — mirrors the TextInput */}
+            <View style={{ flex: 1 }} />
+
+            {/* Above 🎙 — centred over the button */}
+            <View style={styles.nuxColCenter}>
+              <View style={styles.nuxBubble}>
+                <Text style={styles.nuxBubbleTitle}>Dictate</Text>
+                <Text style={styles.nuxBubbleBody}>Voice to text</Text>
+              </View>
+              <View style={styles.nuxTail} />
+            </View>
+
+            {/* Above ↑ — right-aligned so bubble doesn't bleed off-screen */}
+            <View style={styles.nuxColRight}>
+              <View style={styles.nuxBubble}>
+                <Text style={styles.nuxBubbleTitle}>Send</Text>
+              </View>
+              <View style={[styles.nuxTail, styles.nuxTailRight]} />
+            </View>
+          </View>
+        </Animated.View>
+      )}
+
       <View style={styles.inputRow}>
         {isConversing ? (
           <>
@@ -900,6 +979,107 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontFamily: FONTS.bodyBold,
+  },
+
+  // ─── NUX ──────────────────────────────────────────────────────────────────
+
+  nuxContainer: {
+    backgroundColor: COLORS.surfaceHigh,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 10,
+    paddingBottom: 6,
+    paddingHorizontal: 12,
+  },
+  nuxHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  nuxLabel: {
+    color: COLORS.lavenderMid,
+    fontFamily: FONTS.cinzel,
+    fontSize: 9,
+    letterSpacing: 1.2,
+  },
+  nuxGotIt: {
+    color: COLORS.lavender,
+    fontFamily: FONTS.bodySemi,
+    fontSize: 13,
+  },
+  // The NUX row replicates the input row's flex layout so each column sits
+  // directly above its corresponding button.
+  nuxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingBottom: 2,
+  },
+  // Left column (above 🎧): left-align the bubble so it doesn't clip off-screen
+  nuxColLeft: {
+    width: 42,
+    alignItems: 'flex-start',
+  },
+  // Centre column (above 🎙): bubble naturally overflows symmetrically
+  nuxColCenter: {
+    width: 42,
+    alignItems: 'center',
+  },
+  // Right column (above ↑): right-align so bubble doesn't clip off-screen
+  nuxColRight: {
+    width: 42,
+    alignItems: 'flex-end',
+  },
+  nuxBubble: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.lavender + '40',
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    // Soft glow matching the lavender palette
+    shadowColor: COLORS.lavender,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  nuxBubbleTitle: {
+    color: COLORS.textBright,
+    fontFamily: FONTS.bodySemi,
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  nuxBubbleBody: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  // Downward-pointing triangle tail (matches bubble background)
+  nuxTail: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: COLORS.surface,
+    alignSelf: 'center',
+  },
+  // Left-column tail: offset to centre over the 42 px button
+  nuxTailLeft: {
+    alignSelf: 'auto',
+    marginLeft: 15,
+  },
+  // Right-column tail: mirror of left
+  nuxTailRight: {
+    alignSelf: 'auto',
+    marginRight: 15,
   },
 
   // History modal
