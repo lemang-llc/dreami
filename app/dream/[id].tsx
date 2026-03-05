@@ -18,6 +18,7 @@ import { processDream } from '../../src/llm/summarizer';
 import { StarField } from '../../src/components/StarField';
 import { COLORS, MOOD_COLORS, FONTS } from '../../src/theme';
 import { getDreamSessions, SessionSummary } from '../../src/db/chatHistory';
+import { SparkleIcon, RefreshIcon, ChatBubbleIcon } from '../../src/components/Icons';
 
 function formatSessionDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -226,15 +227,20 @@ export default function DreamDetailScreen() {
           !isEditing && (
             <>
               <Pressable style={styles.reprocessBtn} onPress={handleReprocess}>
+                {dream.isProcessed
+                  ? <RefreshIcon color={COLORS.lavender} size={16} />
+                  : <SparkleIcon color={COLORS.lavender} size={16} />
+                }
                 <Text style={styles.reprocessBtnText}>
-                  {dream.isProcessed ? '↺  Re-analyse with AI' : '✦  Analyse with AI'}
+                  {dream.isProcessed ? 'Re-analyse with AI' : 'Analyse with AI'}
                 </Text>
               </Pressable>
               <Pressable
                 style={styles.chatBtn}
                 onPress={() => router.navigate({ pathname: '/(tabs)/chat', params: { dreamId: String(dream.id) } })}
               >
-                <Text style={styles.chatBtnText}>💬  Chat about this dream</Text>
+                <ChatBubbleIcon color={COLORS.teal} size={16} />
+                <Text style={styles.chatBtnText}>Chat about this dream</Text>
               </Pressable>
             </>
           )
@@ -461,10 +467,13 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   reprocessBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     backgroundColor: COLORS.surface,
     borderRadius: 14,
     paddingVertical: 11,
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
     marginBottom: 8,
@@ -475,10 +484,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   chatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     backgroundColor: COLORS.surface,
     borderRadius: 14,
     paddingVertical: 11,
-    alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.teal + '55',
     marginBottom: 20,

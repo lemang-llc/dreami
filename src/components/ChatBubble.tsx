@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { ChatMessage } from '../llm/chat';
 import { COLORS, FONTS } from '../theme';
+import { SpeakerIcon, StopIcon } from './Icons';
 
 interface ChatBubbleProps {
   message: ChatMessage;
@@ -22,10 +23,11 @@ export function ChatBubble({ message, isSpeaking = false, onSpeak }: ChatBubbleP
 
       <View style={styles.meta}>
         {!isUser && onSpeak && (
-          <Pressable onPress={onSpeak} style={styles.speakBtn} hitSlop={8}>
-            <Text style={[styles.speakIcon, isSpeaking && styles.speakIconActive]}>
-              {isSpeaking ? '⏹' : '🔊'}
-            </Text>
+          <Pressable onPress={onSpeak} style={[styles.speakBtn, isSpeaking && styles.speakBtnActive]} hitSlop={8}>
+            {isSpeaking
+              ? <StopIcon color={COLORS.lavender} size={13} />
+              : <SpeakerIcon color={COLORS.textDim} size={13} />
+            }
           </Pressable>
         )}
         <Text style={styles.time}>
@@ -108,12 +110,9 @@ const styles = StyleSheet.create({
   },
   speakBtn: {
     padding: 2,
-  },
-  speakIcon: {
-    fontSize: 13,
     opacity: 0.45,
   },
-  speakIconActive: {
+  speakBtnActive: {
     opacity: 1,
   },
   time: {

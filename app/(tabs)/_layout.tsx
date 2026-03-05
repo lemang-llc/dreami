@@ -1,16 +1,9 @@
 import React from 'react';
 import { Tabs, router } from 'expo-router';
-import { Text, Pressable } from 'react-native';
+import { Pressable } from 'react-native';
 import { DreAmI } from '../../src/components/DreAmI';
+import { MoonIcon, MicIcon, SparkleIcon, GearIcon } from '../../src/components/Icons';
 import { COLORS, FONTS } from '../../src/theme';
-
-function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
-  return (
-    <Text style={{ fontSize: focused ? 22 : 18, opacity: focused ? 1 : 0.4 }}>
-      {emoji}
-    </Text>
-  );
-}
 
 export default function TabsLayout() {
   return (
@@ -22,7 +15,6 @@ export default function TabsLayout() {
           height: 84,
           paddingBottom: 18,
           paddingTop: 8,
-          // Soft upward glow from tab bar
           shadowColor: COLORS.lavender,
           shadowOffset: { width: 0, height: -6 },
           shadowOpacity: 0.1,
@@ -41,11 +33,8 @@ export default function TabsLayout() {
         headerTitleStyle: { fontFamily: FONTS.bodySemi },
         headerTitle: () => <DreAmI size={22} />,
         headerRight: () => (
-          <Pressable
-            onPress={() => router.push('/settings')}
-            style={{ marginRight: 18 }}
-          >
-            <Text style={{ fontSize: 18 }}>⚙️</Text>
+          <Pressable onPress={() => router.push('/settings')} style={{ marginRight: 18 }} hitSlop={8}>
+            <GearIcon color={COLORS.lavender} size={20} />
           </Pressable>
         ),
       }}
@@ -54,21 +43,27 @@ export default function TabsLayout() {
         name="index"
         options={{
           tabBarLabel: 'Dreams',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="🌙" focused={focused} />,
+          tabBarIcon: ({ color, focused }) => (
+            <MoonIcon color={color} size={focused ? 22 : 19} />
+          ),
         }}
       />
       <Tabs.Screen
         name="record"
         options={{
           tabBarLabel: 'Record',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="🎙" focused={focused} />,
+          tabBarIcon: ({ color, focused }) => (
+            <MicIcon color={color} size={focused ? 22 : 19} />
+          ),
         }}
       />
       <Tabs.Screen
         name="chat"
         options={{
           tabBarLabel: 'Explore',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="✨" focused={focused} />,
+          tabBarIcon: ({ color, focused }) => (
+            <SparkleIcon color={color} size={focused ? 22 : 19} />
+          ),
         }}
       />
     </Tabs>

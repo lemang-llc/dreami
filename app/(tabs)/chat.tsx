@@ -18,6 +18,10 @@ import {
 import { useLocalSearchParams, useNavigation, router } from 'expo-router';
 import { useChatStore } from '../../src/stores/chatStore';
 import { ChatBubble, StreamingBubble } from '../../src/components/ChatBubble';
+import {
+  HeadphonesIcon, MicIcon, SendIcon, ClockIcon, GearIcon,
+  XIcon, SparkleIcon,
+} from '../../src/components/Icons';
 import { StarField } from '../../src/components/StarField';
 import { sendChatMessage, ChatMessage } from '../../src/llm/chat';
 import {
@@ -150,11 +154,11 @@ export default function ChatScreen() {
         <View style={styles.headerButtons}>
           {!focusDream && (
             <Pressable onPress={() => setShowHistory(true)} hitSlop={8}>
-              <Text style={styles.headerIcon}>🕐</Text>
+              <ClockIcon color={COLORS.lavender} size={20} />
             </Pressable>
           )}
           <Pressable onPress={() => router.push('/settings')} hitSlop={8}>
-            <Text style={styles.headerIcon}>⚙️</Text>
+            <GearIcon color={COLORS.lavender} size={20} />
           </Pressable>
         </View>
       ),
@@ -547,7 +551,7 @@ export default function ChatScreen() {
 
   const renderEmpty = () => (
     <View style={styles.empty}>
-      <Text style={styles.emptyEmoji}>✨</Text>
+      <SparkleIcon color={COLORS.lavender} size={48} />
       <Text style={styles.emptyTitle}>Explore Your Dreams</Text>
       <Text style={styles.emptySubtitle}>
         Ask about patterns, symbols, or recurring themes in your dream journal.
@@ -567,10 +571,10 @@ export default function ChatScreen() {
   );
 
   const convPhaseLabel: Record<ConvPhase, string> = {
-    listening: '🎤  Listening…',
-    transcribing: '⚙️  Transcribing…',
-    generating: '🤔  Thinking…',
-    speaking: '🔊  Speaking…',
+    listening: 'Listening…',
+    transcribing: 'Transcribing…',
+    generating: 'Thinking…',
+    speaking: 'Speaking…',
   };
 
   const showStreaming = isGenerating && streamingContent.length > 0;
@@ -599,7 +603,7 @@ export default function ChatScreen() {
             ) : null}
           </View>
           <Pressable onPress={() => setFocusDream(null)} hitSlop={12} style={styles.contextBannerDismiss}>
-            <Text style={styles.contextBannerDismissText}>✕</Text>
+            <XIcon color={COLORS.textDim} size={16} />
           </Pressable>
         </View>
       )}
@@ -686,7 +690,8 @@ export default function ChatScreen() {
               <Text style={styles.convStatusText}>{convPhaseLabel[convPhase]}</Text>
             </View>
             <Pressable style={styles.stopConvBtn} onPress={stopConversation}>
-              <Text style={styles.stopConvBtnText}>✕ End</Text>
+              <XIcon color={COLORS.rose} size={15} />
+              <Text style={styles.stopConvBtnText}>End</Text>
             </Pressable>
           </>
         ) : (
@@ -696,7 +701,7 @@ export default function ChatScreen() {
               onPress={startConversation}
               disabled={isBusy}
             >
-              <Text style={styles.convBtnText}>🎧</Text>
+              <HeadphonesIcon color={COLORS.textMid} size={20} />
             </Pressable>
 
             <TextInput
@@ -725,8 +730,10 @@ export default function ChatScreen() {
             >
               {voiceState === 'transcribing' ? (
                 <ActivityIndicator color="#fff" size="small" />
+              ) : voiceState === 'recording' ? (
+                <XIcon color={COLORS.rose} size={18} />
               ) : (
-                <Text style={styles.micBtnText}>{voiceState === 'recording' ? '⏹' : '🎙'}</Text>
+                <MicIcon color={COLORS.textMid} size={19} />
               )}
             </Pressable>
 
@@ -735,7 +742,7 @@ export default function ChatScreen() {
               onPress={handleSend}
               disabled={isBusy || !inputText.trim()}
             >
-              <Text style={styles.sendBtnText}>↑</Text>
+              <SendIcon color="#fff" size={19} />
             </Pressable>
           </>
         )}
@@ -809,9 +816,6 @@ const styles = StyleSheet.create({
     gap: 14,
     marginRight: 18,
   },
-  headerIcon: {
-    fontSize: 18,
-  },
 
   // Empty state
   empty: {
@@ -820,14 +824,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyEmoji: {
-    fontSize: 52,
-    marginBottom: 18,
-  },
   emptyTitle: {
     color: COLORS.textBright,
     fontFamily: FONTS.cinzel,
     fontSize: 20,
+    marginTop: 18,
     marginBottom: 10,
     letterSpacing: 0.5,
   },
@@ -922,10 +923,6 @@ const styles = StyleSheet.create({
   contextBannerDismiss: {
     paddingTop: 2,
   },
-  contextBannerDismissText: {
-    color: COLORS.textDim,
-    fontSize: 14,
-  },
 
   // Conversation mode
   convStatus: {
@@ -943,6 +940,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   stopConvBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: COLORS.surface,
     borderRadius: 20,
     paddingHorizontal: 14,
@@ -966,9 +966,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
-  },
-  convBtnText: {
-    fontSize: 18,
   },
   btnDisabled: {
     opacity: 0.35,
@@ -1003,9 +1000,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.rose + '22',
     borderColor: COLORS.rose,
   },
-  micBtnText: {
-    fontSize: 18,
-  },
   sendBtn: {
     backgroundColor: COLORS.lavenderDeep,
     width: 42,
@@ -1018,11 +1012,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 4,
-  },
-  sendBtnText: {
-    color: '#fff',
-    fontSize: 18,
-    fontFamily: FONTS.bodyBold,
   },
 
   // ─── NUX ──────────────────────────────────────────────────────────────────

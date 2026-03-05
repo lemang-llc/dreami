@@ -19,6 +19,7 @@ import { getDatabase } from '../../src/db/client';
 import { dreams } from '../../src/db/schema';
 import { useDreamStore } from '../../src/stores/dreamStore';
 import { COLORS, FONTS } from '../../src/theme';
+import { MicIcon, RecordDotIcon, StopIcon } from '../../src/components/Icons';
 
 export default function RecordScreen() {
   const { isRecording, waveformBars, start, stop } = useRecorder();
@@ -104,7 +105,7 @@ export default function RecordScreen() {
                 <Waveform bars={waveformBars} color={COLORS.lavender} />
               ) : (
                 <View style={styles.waveformPlaceholder}>
-                  <Text style={styles.micEmoji}>🎙</Text>
+                  <MicIcon color={COLORS.lavender} size={52} />
                 </View>
               )}
             </View>
@@ -113,7 +114,10 @@ export default function RecordScreen() {
               style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
               onPress={isRecording ? handleStopRecording : handleStartRecording}
             >
-              <Text style={styles.recordBtnEmoji}>{isRecording ? '⏹' : '⏺'}</Text>
+              {isRecording
+                ? <StopIcon color="#fff" size={22} />
+                : <RecordDotIcon color="#fff" size={22} />
+              }
               <Text style={styles.recordBtnLabel}>
                 {isRecording ? 'Stop' : 'Record'}
               </Text>
@@ -198,10 +202,6 @@ const styles = StyleSheet.create({
   waveformPlaceholder: {
     alignItems: 'center',
   },
-  micEmoji: {
-    fontSize: 48,
-    opacity: 0.2,
-  },
   recordBtn: {
     backgroundColor: COLORS.surface,
     borderRadius: 60,
@@ -223,9 +223,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.rose,
     backgroundColor: COLORS.rose + '18',
     shadowColor: COLORS.rose,
-  },
-  recordBtnEmoji: {
-    fontSize: 28,
   },
   recordBtnLabel: {
     color: COLORS.textMid,
