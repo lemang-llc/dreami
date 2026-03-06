@@ -337,7 +337,7 @@ export default function SettingsScreen() {
         {/* Footer */}
         <View style={styles.footer}>
           <LeMaNgLabs size={13} />
-          <Text style={styles.copyright}>© 2026 LeMaNg Labs. All rights reserved.</Text>
+          <Text style={styles.copyright}>© 2026 LeMaNg LLC. All rights reserved.</Text>
         </View>
 
       </ScrollView>

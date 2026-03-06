@@ -222,7 +222,7 @@ export function RecordDotIcon({ color = '#fff', size = 24 }: IconProps) {
   );
 }
 
-// ─── Atom (LeMaNg Labs brand) ─────────────────────────────────────────────────
+// ─── Atom (LeMaNg LLC brand) ──────────────────────────────────────────────────
 export function AtomIcon({ color = '#fff', size = 24 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

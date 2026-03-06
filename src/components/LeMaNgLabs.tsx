@@ -9,7 +9,7 @@ interface LeMaNgLabsProps {
 }
 
 /**
- * The LeMaNg Labs brand mark.
+ * The LeMaNg LLC brand mark.
  *
  * Styled to match dreAmI's typographic convention:
  *   capitals → Cinzel (serif), alternating lavender / teal
