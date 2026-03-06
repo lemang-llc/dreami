@@ -6,6 +6,7 @@ import React from 'react';
 import Svg, {
   Path,
   Circle,
+  Ellipse,
   Rect,
   Line,
   Polyline,
@@ -217,6 +218,22 @@ export function RecordDotIcon({ color = '#fff', size = 24 }: IconProps) {
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx="12" cy="12" r="8" fill={color} />
       <Circle cx="12" cy="12" r="11" stroke={color} strokeWidth={1.5} />
+    </Svg>
+  );
+}
+
+// ─── Atom (LeMaNg Labs brand) ─────────────────────────────────────────────────
+export function AtomIcon({ color = '#fff', size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Nucleus */}
+      <Circle cx="12" cy="12" r="1.5" fill={color} />
+      {/* Orbit 1 — horizontal */}
+      <Ellipse cx="12" cy="12" rx="9.5" ry="3.5" stroke={color} strokeWidth={1.2} />
+      {/* Orbit 2 — 60° */}
+      <Ellipse cx="12" cy="12" rx="9.5" ry="3.5" stroke={color} strokeWidth={1.2} transform="rotate(60, 12, 12)" />
+      {/* Orbit 3 — 120° */}
+      <Ellipse cx="12" cy="12" rx="9.5" ry="3.5" stroke={color} strokeWidth={1.2} transform="rotate(120, 12, 12)" />
     </Svg>
   );
 }

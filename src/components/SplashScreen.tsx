@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { DreAmI } from './DreAmI';
+import { LeMaNgLabs } from './LeMaNgLabs';
 import { StarField } from './StarField';
 import { COLORS, FONTS } from '../theme';
 
@@ -39,6 +40,7 @@ export function SplashScreen({ onFinish }: Props) {
   const logoOpacity      = useRef(new Animated.Value(0)).current;
   const logoScale        = useRef(new Animated.Value(0.82)).current;
   const glowOpacity      = useRef(new Animated.Value(0.08)).current; // text-shadow layer
+  const brandOpacity     = useRef(new Animated.Value(0)).current;   // LeMaNg Labs
 
   // ── Sequence ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -53,6 +55,11 @@ export function SplashScreen({ onFinish }: Props) {
         toValue: 1, damping: 13, stiffness: 85, useNativeDriver: true,
       }),
     ]).start();
+
+    // LeMaNg Labs fades in softly after the wordmark settles
+    Animated.timing(brandOpacity, {
+      toValue: 0.6, duration: 700, delay: 1000, useNativeDriver: true,
+    }).start();
 
     // Text glow pulses gently (low → high → low …), native driver via opacity
     const glowAnim = Animated.loop(
@@ -105,7 +112,13 @@ export function SplashScreen({ onFinish }: Props) {
             {/* Crisp wordmark on top */}
             <DreAmI size={LOGO_SIZE} />
           </Animated.View>
+
       </View>
+
+      {/* LeMaNg Labs brand — anchored to bottom, fades in after wordmark settles */}
+      <Animated.View style={[styles.brand, { opacity: brandOpacity }]}>
+        <LeMaNgLabs size={12} />
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -129,5 +142,10 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  brand: {
+    position: 'absolute',
+    bottom: 48,
+    alignSelf: 'center',
   },
 });

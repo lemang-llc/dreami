@@ -19,6 +19,7 @@ import { getModelsDirSize, getRecordingFiles, deleteFile, formatBytes } from '..
 import { MODEL_SIZES, SETTINGS_KEYS } from '../src/models/config';
 import { StarField } from '../src/components/StarField';
 import { DreAmI } from '../src/components/DreAmI';
+import { LeMaNgLabs } from '../src/components/LeMaNgLabs';
 import { COLORS, FONTS } from '../src/theme';
 import { getSqliteDb } from '../src/db/client';
 import { setTtsVoice, setTtsRate } from '../src/audio/tts';
@@ -327,6 +328,12 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Footer */}
+        <View style={styles.footer}>
+          <LeMaNgLabs size={13} />
+          <Text style={styles.copyright}>© 2026 LeMaNg Labs. All rights reserved.</Text>
+        </View>
+
       </ScrollView>
     </View>
   );
@@ -533,6 +540,21 @@ const styles = StyleSheet.create({
     color: COLORS.rose,
     fontFamily: FONTS.bodyMed,
     fontSize: 14,
+  },
+
+  // Footer
+  footer: {
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 8,
+    paddingBottom: 16,
+    opacity: 0.55,
+  },
+  copyright: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
 
   // About
