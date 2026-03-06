@@ -87,15 +87,15 @@ function formatSessionDate(dateStr: string): string {
 const NUX_STEPS = [
   {
     title: 'Hands-free voice chat',
-    body: 'Tap 🎧 to start a back-and-forth voice conversation — dreAmI listens and speaks back automatically.',
+    body: 'Tap the headphones button to start a back-and-forth voice conversation — dreAmI listens and speaks back automatically.',
   },
   {
     title: 'Dictate your message',
-    body: 'Tap 🎙 to record. Tap ⏹ when you\'re done — your words are transcribed into the text box for you to review.',
+    body: 'Tap the mic button to record. Tap stop when you\'re done — your words are transcribed into the text box for you to review.',
   },
   {
     title: 'Type & send',
-    body: 'Or just type your question and tap ↑ to send.',
+    body: 'Or just type your question and tap the send button.',
   },
 ];
 
@@ -710,7 +710,7 @@ export default function ChatScreen() {
               value={inputText}
               onChangeText={setInputText}
               placeholder={
-                voiceState === 'recording' ? 'Listening… tap ⏹ to finish'
+                voiceState === 'recording' ? 'Listening… tap stop to finish'
                   : voiceState === 'transcribing' ? 'Transcribing…'
                   : 'Ask about your dreams…'
               }

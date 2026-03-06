@@ -18,6 +18,7 @@ import { StarField } from '../../src/components/StarField';
 import { Dream } from '../../src/db/schema';
 import { COLORS, MOOD_COLORS, FONTS } from '../../src/theme';
 import { ftsSearch } from '../../src/rag/pipeline';
+import { SearchIcon, MoonIcon, XIcon } from '../../src/components/Icons';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -180,7 +181,12 @@ export default function DreamListScreen() {
     if (isLoading) return null;
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyEmoji}>{isFiltered ? '🔍' : '🌙'}</Text>
+        <View style={styles.emptyIcon}>
+          {isFiltered
+            ? <SearchIcon color={COLORS.lavender} size={52} />
+            : <MoonIcon color={COLORS.lavender} size={52} />
+          }
+        </View>
         <Text style={styles.emptyTitle}>
           {isFiltered ? 'No matching dreams' : 'No dreams yet'}
         </Text>
@@ -207,7 +213,7 @@ export default function DreamListScreen() {
 
       {/* Search bar */}
       <View style={styles.searchBar}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <SearchIcon color={COLORS.textDim} size={16} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search dreams…"
@@ -220,7 +226,7 @@ export default function DreamListScreen() {
         />
         {searchQuery.length > 0 && (
           <Pressable onPress={() => setSearchQuery('')} hitSlop={12}>
-            <Text style={styles.searchClear}>✕</Text>
+            <XIcon color={COLORS.textFaint} size={16} />
           </Pressable>
         )}
         {isSearching && <ActivityIndicator color={COLORS.lavender} size="small" style={{ marginLeft: 4 }} />}
@@ -298,7 +304,9 @@ export default function DreamListScreen() {
           ListEmptyComponent={
             isSearching ? null : (
               <View style={styles.empty}>
-                <Text style={styles.emptyEmoji}>🔍</Text>
+                <View style={styles.emptyIcon}>
+                  <SearchIcon color={COLORS.lavender} size={52} />
+                </View>
                 <Text style={styles.emptyTitle}>No dreams found</Text>
                 <Text style={styles.emptySubtitle}>Try different keywords or concepts.</Text>
               </View>
@@ -358,21 +366,12 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     gap: 8,
   },
-  searchIcon: {
-    fontSize: 14,
-    opacity: 0.6,
-  },
   searchInput: {
     flex: 1,
     color: COLORS.textBright,
     fontFamily: FONTS.body,
     fontSize: 14,
     padding: 0,
-  },
-  searchClear: {
-    color: COLORS.textFaint,
-    fontSize: 13,
-    paddingHorizontal: 2,
   },
   searchResultsHeader: {
     color: COLORS.textDim,
@@ -503,9 +502,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 32,
   },
-  emptyEmoji: {
-    fontSize: 52,
+  emptyIcon: {
     marginBottom: 18,
+    opacity: 0.7,
   },
   emptyTitle: {
     color: COLORS.textBright,

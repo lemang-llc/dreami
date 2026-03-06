@@ -21,6 +21,7 @@ import { appSettings } from '../../src/db/schema';
 import { useAppStore } from '../../src/stores/appStore';
 import { ensureDirectoriesExist } from '../../src/utils/fileSystem';
 import { COLORS, FONTS } from '../../src/theme';
+import { MoonIcon } from '../../src/components/Icons';
 
 export default function OnboardingScreen() {
   const { llm, embed, whisper, checkDownloaded, downloadAll, allDownloaded, resumeInterruptedDownloads } =
@@ -86,7 +87,9 @@ export default function OnboardingScreen() {
 
         {/* Hero */}
         <View style={styles.hero}>
-          <Text style={styles.moonEmoji}>🌙</Text>
+          <View style={styles.moonIcon}>
+            <MoonIcon color={COLORS.lavender} size={56} />
+          </View>
           <DreAmI size={42} style={styles.wordmark} />
           <Text style={styles.tagline}>
             Your fully private dream journal.{'\n'}
@@ -176,8 +179,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 44,
   },
-  moonEmoji: {
-    fontSize: 56,
+  moonIcon: {
     marginBottom: 16,
   },
   wordmark: {

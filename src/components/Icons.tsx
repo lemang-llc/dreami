@@ -220,3 +220,13 @@ export function RecordDotIcon({ color = '#fff', size = 24 }: IconProps) {
     </Svg>
   );
 }
+
+// ─── Search (magnifying glass) ────────────────────────────────────────────────
+export function SearchIcon({ color = '#fff', size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="11" cy="11" r="8" stroke={color} strokeWidth={1.5} />
+      <Line x1="16.5" y1="16.5" x2="22" y2="22" stroke={color} strokeWidth={1.75} strokeLinecap="round" />
+    </Svg>
+  );
+}
