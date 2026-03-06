@@ -127,6 +127,10 @@ export default function RootLayout() {
           name="settings"
           options={{ title: 'Settings', presentation: 'modal' }}
         />
+        <Stack.Screen
+          name="licenses"
+          options={{ title: 'Open Source Licenses', headerBackTitle: 'Settings' }}
+        />
       </Stack>
     </>
   );

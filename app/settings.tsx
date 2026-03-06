@@ -22,6 +22,7 @@ import { DreAmI } from '../src/components/DreAmI';
 import { LeMaNgLabs } from '../src/components/LeMaNgLabs';
 import { COLORS, FONTS } from '../src/theme';
 import { getSqliteDb } from '../src/db/client';
+import { router } from 'expo-router';
 import { setTtsVoice, setTtsRate } from '../src/audio/tts';
 import type { Voice as SpeechVoice } from 'expo-speech';
 
@@ -326,6 +327,11 @@ export default function SettingsScreen() {
               No data ever leaves your phone.
             </Text>
           </View>
+
+          <Pressable style={styles.licensesRow} onPress={() => router.push('/licenses')}>
+            <Text style={styles.licensesLabel}>Open Source Licenses</Text>
+            <Text style={styles.licensesChevron}>›</Text>
+          </Pressable>
         </View>
 
         {/* Footer */}
@@ -580,5 +586,28 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 13,
     lineHeight: 20,
+  },
+  licensesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  licensesLabel: {
+    color: COLORS.textMid,
+    fontFamily: FONTS.bodyMed,
+    fontSize: 14,
+  },
+  licensesChevron: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
+    fontSize: 20,
+    lineHeight: 22,
   },
 });
