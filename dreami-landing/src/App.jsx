@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Features from './components/Features';
+import VideoSection from './components/VideoSection';
 import PrivacySection from './components/PrivacySection';
 import FAQ from './components/FAQ';
 import Download from './components/Download';
@@ -56,6 +57,7 @@ export default function App() {
       <StarField />
       <Navbar />
       <Hero />
+      <VideoSection />
       <Features />
       <PrivacySection />
       <FAQ />
