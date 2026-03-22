@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { getWhisperContext, releaseWhisperContext } from '../models/whisperContext';
 
 export interface TranscriptionResult {
@@ -38,7 +39,12 @@ export async function transcribeAudio(
 ): Promise<TranscriptionResult> {
   const whisper = await getWhisperContext();
 
-  const { stop, promise } = whisper.transcribe(audioFileUri, {
+  // whisper.rn on Android uses JNI and requires a raw file path, not a
+  // file:// URI. On iOS the framework handles URIs natively so no change needed.
+  const filePath =
+    Platform.OS === 'android' ? audioFileUri.replace(/^file:\/\//, '') : audioFileUri;
+
+  const { stop, promise } = whisper.transcribe(filePath, {
     language: 'en',
     tokenTimestamps: false,
     // temperature: 0 → greedy decoding; more deterministic and less prone to

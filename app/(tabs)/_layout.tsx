@@ -1,19 +1,22 @@
 import React from 'react';
 import { Tabs, router } from 'expo-router';
 import { Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DreAmI } from '../../src/components/DreAmI';
 import { MoonIcon, MicIcon, SparkleIcon, GearIcon } from '../../src/components/Icons';
 import { COLORS, FONTS } from '../../src/theme';
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
         tabBarStyle: {
           backgroundColor: '#0c0c20',
           borderTopWidth: 0,
-          height: 84,
-          paddingBottom: 18,
+          height: 84 + insets.bottom,
+          paddingBottom: 18 + insets.bottom,
           paddingTop: 8,
           shadowColor: COLORS.lavender,
           shadowOffset: { width: 0, height: -6 },
