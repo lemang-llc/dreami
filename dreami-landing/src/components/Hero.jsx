@@ -26,14 +26,13 @@ export default function Hero() {
             </p>
             <div className="hero-buttons">
               <a
-                href="https://apps.apple.com/app/dreami/idYOUR_APP_ID"
+                href="https://play.google.com/store/apps/details?id=llc.lemang.dreami"
                 className="btn btn-primary"
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Download dreAmI on the App Store"
+                aria-label="Get dreAmI on Google Play"
               >
-                <AppStoreIcon />
-                Download on the App Store
+                Get it on Google Play
               </a>
               <a
                 href="#features"

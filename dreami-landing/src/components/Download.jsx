@@ -12,15 +12,15 @@ export default function Download() {
 
           <div className="download-buttons">
             <a
-              href="https://apps.apple.com/app/dreami/idYOUR_APP_ID"
-              className="download-btn ios-btn"
+              href="https://play.google.com/store/apps/details?id=llc.lemang.dreami"
+              className="download-btn android-btn"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Download dreAmI on the App Store"
+              aria-label="Get dreAmI on Google Play"
             >
               <img
-                src="/images/download-ios.svg"
-                alt="Download on the App Store"
+                src="/images/download-android.png"
+                alt="Get it on Google Play"
                 className="download-img"
               />
             </a>
@@ -32,7 +32,7 @@ export default function Download() {
                 <rect x="5" y="2" width="14" height="20" rx="2" />
                 <line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="2" />
               </svg>
-              <span>iPhone · iOS 16+</span>
+              <span>Android 7.0+</span>
             </div>
             <div className="info-item">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
