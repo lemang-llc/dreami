@@ -1,13 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Tabs, router } from 'expo-router';
 import { Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DreAmI } from '../../src/components/DreAmI';
 import { MoonIcon, MicIcon, SparkleIcon, GearIcon } from '../../src/components/Icons';
 import { COLORS, FONTS } from '../../src/theme';
+import { screenshotStateValue } from '../../src/utils/screenshotSeed';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+
+  // Screenshot mode: push the settings modal on top once the tabs have mounted
+  useEffect(() => {
+    if (__DEV__ && screenshotStateValue === 'settings') {
+      const t = setTimeout(() => router.push('/settings'), 300);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   return (
     <Tabs

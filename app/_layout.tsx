@@ -15,6 +15,7 @@ import { initDatabase } from '../src/db/client';
 import { appSettings } from '../src/db/schema';
 import { SETTINGS_KEYS } from '../src/models/config';
 import { ensureDirectoriesExist } from '../src/utils/fileSystem';
+import { fetchScreenshotState, seedForScreenshotState, signalScreenshotReady } from '../src/utils/screenshotSeed';
 import {
   configureNotificationHandler,
   scheduleNotification,
@@ -33,6 +34,7 @@ export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(false);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
   const pendingNavRef = useRef<string | null>(null);
+  const skipSplashRef = useRef(false);
 
   const [fontsLoaded] = useFonts({
     Cinzel_400Regular,
@@ -47,6 +49,25 @@ export default function RootLayout() {
     async function init() {
       await ensureDirectoriesExist();
       await initDatabase();
+
+      // Screenshot automation — only active in dev builds when the capture
+      // script is running. The fetch times out in 800 ms so normal dev
+      // launches are unaffected when no server is present.
+      if (__DEV__) {
+        const screenshotState = await fetchScreenshotState();
+        if (screenshotState !== null) {
+          // seedForScreenshotState sets the module-level screenshotRoute which
+          // index.tsx reads to redirect to the correct screen on first render.
+          await seedForScreenshotState(screenshotState);
+          setOnboardingComplete(true);
+          skipSplashRef.current = true;
+          setIsReady(true);
+          // Wait for index.tsx to redirect and the target screen to mount + render,
+          // then signal the capture script that it can take the screenshot.
+          setTimeout(() => signalScreenshotReady(), 1800);
+          return;
+        }
+      }
 
       const db = getDatabase();
       const rows = await db
@@ -91,10 +112,11 @@ export default function RootLayout() {
     }
   }, [isReady, onboardingComplete]);
 
-  // Show custom splash once the app is fully initialised
+  // Show custom splash once the app is fully initialised (skipped in screenshot mode)
   useEffect(() => {
-    if (isReady && fontsLoaded) setShowSplash(true);
+    if (isReady && fontsLoaded && !skipSplashRef.current) setShowSplash(true);
   }, [isReady, fontsLoaded]);
+
 
   if (!fontsLoaded || !isReady) {
     // Dark background while fonts + DB load — native splash covers this gap
