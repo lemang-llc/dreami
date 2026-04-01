@@ -11,7 +11,7 @@ export default function Footer() {
               <Wordmark size="1.1rem" />
             </div>
             <p className="footer-description">
-              A fully private AI dream journal. All processing happens on your iPhone.
+              A fully private AI dream journal. All processing happens on your device.
               No cloud. No account. No tracking.
             </p>
             <div className="footer-lemang">

@@ -15,7 +15,7 @@ export default function PrivacyPolicy() {
             <p>
               <strong>The short version:</strong> dreAmI collects no personal data.
               All AI processing happens on your device. Nothing you record, write, or say
-              ever leaves your iPhone.
+              ever leaves your device.
             </p>
           </div>
 
@@ -47,13 +47,11 @@ export default function PrivacyPolicy() {
           <p>
             All data created in dreAmI — including dream transcripts, AI-generated analyses,
             voice recordings, and chat history — is stored locally in a SQLite database on
-            your iPhone. This data is:
+            your device. This data is:
           </p>
           <ul>
             <li>Never transmitted to our servers or any third-party service</li>
-            <li>Protected by iOS's standard app sandboxing</li>
-            <li>Included in your standard iCloud device backup if you have iCloud Backup enabled
-              (this backup is encrypted and managed by Apple, not by us)</li>
+            <li>Protected by the standard app sandboxing on your device</li>
             <li>Permanently deleted when you delete the app</li>
           </ul>
           <p>
@@ -88,7 +86,7 @@ export default function PrivacyPolicy() {
           <p>
             dreAmI optionally sends a daily local notification to remind you to record your
             dreams. This notification is scheduled and delivered entirely on your device by
-            iOS. No notification data is sent to our servers.
+            Android. No notification data is sent to our servers.
           </p>
 
           <h2>7. Third-party services</h2>

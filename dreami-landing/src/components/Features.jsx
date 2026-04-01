@@ -76,7 +76,7 @@ export default function Features() {
           <h2 id="features-heading" className="section-title">Everything you need to understand your dreams</h2>
           <p className="section-description">
             Three on-device AI models work together to transcribe, analyse, and help you explore
-            your dream world — with zero data leaving your iPhone.
+            your dream world — with zero data leaving your device.
           </p>
         </div>
         <div className="features-grid">

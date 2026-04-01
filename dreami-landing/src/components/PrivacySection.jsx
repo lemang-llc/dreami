@@ -1,7 +1,7 @@
 const pillars = [
   {
     label: 'No cloud',
-    detail: 'All AI inference runs on your iPhone. Nothing is sent to a server.',
+    detail: 'All AI inference runs on your device. Nothing is sent to a server.',
   },
   {
     label: 'No account',

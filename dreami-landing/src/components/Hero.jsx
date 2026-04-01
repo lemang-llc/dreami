@@ -21,7 +21,7 @@ export default function Hero() {
             <h1 className="hero-title">Your dreams stay yours.</h1>
             <p className="hero-description">
               Speak your dream the moment you wake. dreAmI transcribes, interprets, and
-              remembers — entirely on your iPhone. No cloud. No account. No one reads
+              remembers — entirely on your device. No cloud. No account. No one reads
               your dreams but you.
             </p>
             <div className="hero-buttons">
@@ -43,9 +43,8 @@ export default function Hero() {
               </a>
             </div>
             <div className="hero-badges">
-              <span className="badge">iOS 16+</span>
+              <span className="badge">Android</span>
               <span className="badge">$0.99</span>
-              <span className="badge">iPhone only</span>
               <span className="badge">On-device AI</span>
             </div>
           </div>

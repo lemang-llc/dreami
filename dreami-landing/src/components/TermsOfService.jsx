@@ -21,8 +21,8 @@ export default function TermsOfService() {
           <h2>2. License</h2>
           <p>
             We grant you a personal, non-exclusive, non-transferable, revocable license to
-            use the App on any iPhone you own or control, subject to these terms and the
-            App Store Terms of Service.
+            use the App on any Android device you own or control, subject to these terms and the
+            Google Play Terms of Service.
           </p>
           <p>You may not:</p>
           <ul>
