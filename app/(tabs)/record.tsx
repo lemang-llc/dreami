@@ -19,13 +19,14 @@ import { getDatabase } from '../../src/db/client';
 import { dreams } from '../../src/db/schema';
 import { useDreamStore } from '../../src/stores/dreamStore';
 import { COLORS, FONTS } from '../../src/theme';
-import { MicIcon, RecordDotIcon, StopIcon } from '../../src/components/Icons';
+import { MicIcon, PenIcon, RecordDotIcon, StopIcon } from '../../src/components/Icons';
 
 export default function RecordScreen() {
   const { isRecording, waveformBars, start, stop } = useRecorder();
   const { transcribe, isTranscribing, progress, transcript, setTranscript } = useTranscription();
   const store = useDreamStore();
   const [isSaving, setIsSaving] = useState(false);
+  const [isManualEntry, setIsManualEntry] = useState(false);
 
   // Keep the screen on while recording so the mic isn't cut short.
   useEffect(() => {
@@ -79,10 +80,19 @@ export default function RecordScreen() {
     }
   };
 
+  const handleTypeManually = () => {
+    setTranscript('');
+    setIsManualEntry(true);
+    store.setRecordingState('editing');
+  };
+
   const handleDiscard = () => {
-    Alert.alert('Discard Recording?', 'This will delete the current recording.', [
+    const message = isManualEntry
+      ? 'This will clear what you\'ve written.'
+      : 'This will delete the current recording.';
+    Alert.alert('Discard?', message, [
       { text: 'Keep', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: () => store.reset() },
+      { text: 'Discard', style: 'destructive', onPress: () => { setIsManualEntry(false); store.reset(); } },
     ]);
   };
 
@@ -122,6 +132,13 @@ export default function RecordScreen() {
                 {isRecording ? 'Stop' : 'Record'}
               </Text>
             </Pressable>
+
+            {!isRecording && (
+              <Pressable style={styles.typeInsteadBtn} onPress={handleTypeManually}>
+                <PenIcon color={COLORS.textDim} size={14} />
+                <Text style={styles.typeInsteadText}>or type instead</Text>
+              </Pressable>
+            )}
           </View>
         )}
 
@@ -138,7 +155,7 @@ export default function RecordScreen() {
         {(recordingState === 'editing' || recordingState === 'saving') && (
           <View style={styles.editSection}>
             <Text style={styles.editHint}>
-              Review and edit your dream, then save.
+              {isManualEntry ? 'Write your dream below, then save.' : 'Review and edit your dream, then save.'}
             </Text>
 
             <TranscriptEditor value={transcript} onChange={setTranscript} />
@@ -227,6 +244,19 @@ const styles = StyleSheet.create({
   recordBtnLabel: {
     color: COLORS.textMid,
     fontFamily: FONTS.bodyMed,
+    fontSize: 13,
+  },
+  typeInsteadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  typeInsteadText: {
+    color: COLORS.textDim,
+    fontFamily: FONTS.body,
     fontSize: 13,
   },
   transcribingSection: {

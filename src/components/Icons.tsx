@@ -247,3 +247,18 @@ export function SearchIcon({ color = '#fff', size = 24 }: IconProps) {
     </Svg>
   );
 }
+
+// ─── Pen (edit / type manually) ───────────────────────────────────────────────
+export function PenIcon({ color = '#fff', size = 24 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M17 3a2.828 2.828 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
