@@ -26,14 +26,25 @@ export default function Hero() {
             </p>
             <div className="hero-buttons">
               <a
+                href="https://apps.apple.com/us/app/ai-dreami/id6760162241"
+                className="download-btn ios-btn"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Download dreAmI on the App Store"
+              >
+                <img src="/download-ios.svg" alt="Download on the App Store" className="download-img" />
+              </a>
+              <a
                 href="https://play.google.com/store/apps/details?id=llc.lemang.dreami"
-                className="btn btn-primary"
+                className="download-btn android-btn"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Get dreAmI on Google Play"
               >
-                Get it on Google Play
+                <img src="/images/download-android.png" alt="Get it on Google Play" className="download-img" />
               </a>
+            </div>
+            <div className="hero-cta">
               <a
                 href="#features"
                 className="btn btn-secondary"
@@ -43,7 +54,7 @@ export default function Hero() {
               </a>
             </div>
             <div className="hero-badges">
-              <span className="badge">Android</span>
+              <span className="badge">iOS &amp; Android</span>
               <span className="badge">$0.99</span>
               <span className="badge">On-device AI</span>
             </div>

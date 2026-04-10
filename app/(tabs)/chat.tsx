@@ -741,6 +741,7 @@ export default function ChatScreen() {
               style={[styles.sendBtn, (isBusy || !inputText.trim()) && styles.btnDisabled]}
               onPress={handleSend}
               disabled={isBusy || !inputText.trim()}
+              testID="send-message"
             >
               <SendIcon color="#fff" size={19} />
             </Pressable>
