@@ -193,6 +193,81 @@ eas build --profile production --platform all
 
 Profiles are defined in `eas.json`.
 
+## Generating Screenshots
+
+Screenshots are captured automatically with zero manual interaction. The app runs a tiny HTTP state server that seeds demo data and navigates to each target screen; captures happen as soon as the screen signals ready.
+
+### iOS (App Store)
+
+**Prerequisites — do once per native change:**
+
+```bash
+# 1. Build and install on the simulator
+npx expo run:ios
+
+# 2. Start Metro in a separate terminal
+npx expo start
+```
+
+**Capture:**
+
+```bash
+# Boot iPhone 16 Pro Max in Simulator.app, then:
+npm run screenshots
+```
+
+Output:
+- `screenshots/raw/` — raw simulator captures
+- `screenshots/appstore/6.9inch/` — 1320×2868 (iPhone 16 Pro Max, required from iOS 18)
+- `screenshots/appstore/6.5inch/` — 1242×2688 (iPhone XS Max / 11 Pro Max, required)
+
+Upload the `screenshots/appstore/` folders to App Store Connect. Both size sets are required.
+
+### Android (Google Play)
+
+**Prerequisites — do once per native change:**
+
+```bash
+# 1. Build and install on the device/emulator
+npx expo run:android
+
+# 2. Start Metro in a separate terminal
+npx expo start
+```
+
+**Capture:**
+
+```bash
+# Connect a device (USB debugging on) or start an emulator, then:
+npm run screenshots:android
+```
+
+The script uses `adb reverse` to forward the state server port to the device — no extra setup needed for physical devices.
+
+Output:
+- `screenshots/raw/android/` — raw device captures
+- `screenshots/appstore/android/phone/` — 1080×1920 (required for Play Store)
+
+Upload `screenshots/appstore/android/phone/` to Google Play Console.
+
+---
+
+## Version Bumping
+
+Use the `bump-version` script to keep `app.json`, `package.json`, and the native iOS files in sync:
+
+```bash
+npm run bump-version 1.2.0
+```
+
+This updates:
+- `app.json` — `expo.version`
+- `package.json` — `version`
+- `ios/dreAmI.xcodeproj/project.pbxproj` — `MARKETING_VERSION` (what Xcode archive reads)
+- `ios/dreAmI/Info.plist` — `CFBundleShortVersionString`
+
+For Android, also increment `versionCode` manually in `android/app/build.gradle` before building — see [ANDROID_DEPLOY.md](./ANDROID_DEPLOY.md).
+
 ## Database
 
 Drizzle ORM + expo-sqlite. Schema lives in `src/db/`. To generate migrations after schema changes:
@@ -209,7 +284,7 @@ Migrations run automatically on app launch.
 app/                    expo-router screens
   (onboarding)/         model download flow
   (tabs)/               main tab nav (journal, record, chat)
-  dream/                individual dream detail
+    dream/              dream detail (nested here to keep the tab bar visible)
   settings.tsx
 src/
   audio/                recorder, transcriber

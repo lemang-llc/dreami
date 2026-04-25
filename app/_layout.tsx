@@ -142,10 +142,6 @@ export default function RootLayout() {
         <Stack.Screen name="(onboarding)/index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
-          name="dream/[id]"
-          options={{ title: 'Dream', headerBackTitle: 'Back' }}
-        />
-        <Stack.Screen
           name="settings"
           options={{ title: 'Settings', presentation: 'modal' }}
         />

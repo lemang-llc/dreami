@@ -1,6 +1,6 @@
 {
   "name": "dreami",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -8,7 +8,8 @@
     "ios": "expo run:ios",
     "postinstall": "patch-package",
     "screenshots": "node scripts/capture-screenshots.js",
-    "screenshots:android": "node scripts/capture-screenshots-android.js"
+    "screenshots:android": "node scripts/capture-screenshots-android.js",
+    "bump-version": "node scripts/bump-version.js"
   },
   "dependencies": {
     "@expo-google-fonts/cinzel": "^0.4.2",

@@ -78,6 +78,10 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="dream/[id]"
+        options={{ href: null }}
+      />
     </Tabs>
   );
 }
