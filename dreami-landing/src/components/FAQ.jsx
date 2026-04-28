@@ -3,7 +3,7 @@ import { useState } from 'react';
 const faqs = [
   {
     q: 'What is dreAmI?',
-    a: 'dreAmI is a private AI dream journal for Android. You speak your dream aloud after waking and the app transcribes it, generates an AI interpretation, and lets you chat with an AI dream guide — all running locally on your device with no internet required.',
+    a: 'dreAmI is a private AI dream journal for iPhone and Android. You speak your dream aloud after waking and the app transcribes it, generates an AI interpretation, and lets you chat with an AI dream guide — all running locally on your device with no internet required.',
   },
   {
     q: 'Does dreAmI use the cloud or send my data anywhere?',
@@ -22,8 +22,8 @@ const faqs = [
     a: 'dreAmI runs on Android devices with sufficient memory to support the on-device AI models. For the best performance, a recent flagship or mid-range device is recommended.',
   },
   {
-    q: 'Is dreAmI available for iOS or iPad?',
-    a: 'dreAmI is currently available for Android. An iOS version is coming soon.',
+    q: 'Is dreAmI available for iPhone or iPad?',
+    a: 'dreAmI is available for iPhone on the App Store and for Android on Google Play. An iPad version is not currently supported.',
   },
   {
     q: 'How does the voice conversation mode work?',
